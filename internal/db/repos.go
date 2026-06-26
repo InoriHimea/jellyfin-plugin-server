@@ -26,14 +26,14 @@ var defaultRepos = []struct {
 		Priority: 100,
 	},
 	{
-		Name:     "Intro Skipper",
-		URL:      "https://raw.githubusercontent.com/jumoog/intro-skipper/master/manifest.json",
-		Priority: 80,
+		Name:     "Intro Skipper (10.11)",
+		URL:      "https://raw.githubusercontent.com/intro-skipper/manifest/main/10.11/manifest.json",
+		Priority: 82,
 	},
 	{
-		Name:     "Open Subtitles",
-		URL:      "https://raw.githubusercontent.com/nickeyl/jellyfin-opensubtitles/master/manifest.json",
-		Priority: 70,
+		Name:     "Intro Skipper (10.10)",
+		URL:      "https://raw.githubusercontent.com/intro-skipper/manifest/main/10.10/manifest.json",
+		Priority: 80,
 	},
 	{
 		Name:     "Ani-Sync",
