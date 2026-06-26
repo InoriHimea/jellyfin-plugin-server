@@ -1,13 +1,26 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { api, type Status, type Package } from '@/lib/api'
-import { HardDrive, Database, Package as PkgIcon, Wifi } from 'lucide-react'
+import { HardDrive, Database, Package as PkgIcon, Wifi, Copy, Check } from 'lucide-react'
+import { toast } from 'sonner'
 
 export function Dashboard() {
   const [status, setStatus] = useState<Status | null>(null)
   const [packages, setPackages] = useState<Package[]>([])
   const [repoCount, setRepoCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [copied, setCopied] = useState(false)
+
+  const manifestURL = `${window.location.origin}/manifest`
+
+  const copyManifestURL = () => {
+    navigator.clipboard.writeText(manifestURL).then(() => {
+      setCopied(true)
+      toast.success('已复制到剪贴板')
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   useEffect(() => {
     Promise.all([
@@ -74,6 +87,23 @@ export function Dashboard() {
           </Card>
         ))}
       </div>
+
+      <Card className="border-primary/40 bg-primary/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Jellyfin 插件仓库地址</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            复制以下地址，添加到 Jellyfin → 控制台 → 插件 → 存储库
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2 bg-muted rounded-md px-3 py-2">
+            <code className="text-sm flex-1 break-all select-all">{manifestURL}</code>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={copyManifestURL}>
+              {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

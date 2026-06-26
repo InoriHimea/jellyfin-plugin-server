@@ -30,6 +30,21 @@ func PluginRouter(ctx *fasthttp.RequestCtx) {
 	}
 }
 
+// handleUnifiedManifest serves GET /manifest — all enabled repos merged and deduplicated by GUID.
+func handleUnifiedManifest(ctx *fasthttp.RequestCtx) {
+	baseURL := baseURLFromCtx(ctx)
+	catalog, err := manifest.BuildUnifiedManifest(baseURL)
+	if err != nil {
+		logger.Error("build unified manifest failed", map[string]any{"err": err})
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	b, _ := json.Marshal(catalog)
+	ctx.SetContentType("application/json")
+	ctx.SetStatusCode(fasthttp.StatusOK)
+	ctx.SetBody(b)
+}
+
 func handleManifest(ctx *fasthttp.RequestCtx, repoID string) {
 	repo, err := db.GetRepo(repoID)
 	if err != nil {

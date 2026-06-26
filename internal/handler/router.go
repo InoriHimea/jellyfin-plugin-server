@@ -18,6 +18,9 @@ func Router(ctx *fasthttp.RequestCtx) {
 	case path == "/health":
 		Health(ctx)
 
+	case path == "/manifest":
+		handleUnifiedManifest(ctx)
+
 	case strings.HasPrefix(path, "/api/"):
 		APIRouter(ctx)
 

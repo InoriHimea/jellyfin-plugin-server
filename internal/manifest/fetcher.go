@@ -201,6 +201,84 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 	return catalog, nil
 }
 
+// BuildUnifiedManifest aggregates all enabled repos into one deduplicated Catalog.
+// Per-GUID: metadata from the highest-priority repo; per (GUID, version): highest-priority copy wins.
+func BuildUnifiedManifest(baseURL string) (Catalog, error) {
+	rows, err := db.DB.Query(
+		`SELECT p.guid, p.name, COALESCE(p.description,''), COALESCE(p.overview,''),
+		        COALESCE(p.owner,''), COALESCE(p.category,''),
+		        v.version, COALESCE(v.changelog,''), COALESCE(v.target_abi,''),
+		        v.source_url, v.checksum, COALESCE(v.timestamp,''),
+		        COALESCE(v.local_path,''), v.download_status
+		 FROM plugins p
+		 JOIN plugin_versions v ON v.plugin_id = p.id
+		 JOIN repos r ON r.id = p.repo_id
+		 WHERE r.enabled = 1
+		 ORDER BY r.priority DESC, p.guid, v.timestamp DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type pluginEntry struct {
+		p            *Plugin
+		seenVersions map[string]bool
+	}
+	seen := make(map[string]*pluginEntry)
+	var order []string
+
+	for rows.Next() {
+		var (
+			guid, name, desc, overview, owner, cat    string
+			ver, changelog, abi, srcURL, checksum, ts string
+			localPath, dlStatus                        string
+		)
+		if err := rows.Scan(&guid, &name, &desc, &overview, &owner, &cat,
+			&ver, &changelog, &abi, &srcURL, &checksum, &ts,
+			&localPath, &dlStatus); err != nil {
+			return nil, err
+		}
+
+		if _, ok := seen[guid]; !ok {
+			seen[guid] = &pluginEntry{
+				p: &Plugin{
+					GUID: guid, Name: name, Description: desc,
+					Overview: overview, Owner: owner, Category: cat,
+				},
+				seenVersions: make(map[string]bool),
+			}
+			order = append(order, guid)
+		}
+
+		e := seen[guid]
+		if e.seenVersions[ver] {
+			continue
+		}
+		e.seenVersions[ver] = true
+
+		resolvedURL := srcURL
+		if dlStatus == "done" && localPath != "" {
+			resolvedURL = localURL(baseURL, checksum, localPath)
+		}
+
+		e.p.Versions = append(e.p.Versions, Version{
+			Version:   ver,
+			ChangeLog: changelog,
+			TargetABI: abi,
+			SourceURL: resolvedURL,
+			Checksum:  checksum,
+			Timestamp: ts,
+		})
+	}
+
+	catalog := make(Catalog, 0, len(order))
+	for _, g := range order {
+		catalog = append(catalog, *seen[g].p)
+	}
+	return catalog, nil
+}
+
 func localURL(base, checksum, localPath string) string {
 	// extract filename from localPath
 	idx := strings.LastIndex(localPath, "/")

@@ -25,20 +25,62 @@ var defaultRepos = []struct {
 		URL:      "https://repo.jellyfin.org/releases/plugin/manifest.json",
 		Priority: 100,
 	},
+	// Intro Skipper: version-specific manifests from intro-skipper/manifest
 	{
 		Name:     "Intro Skipper (10.11)",
 		URL:      "https://raw.githubusercontent.com/intro-skipper/manifest/main/10.11/manifest.json",
-		Priority: 82,
+		Priority: 92,
 	},
 	{
 		Name:     "Intro Skipper (10.10)",
 		URL:      "https://raw.githubusercontent.com/intro-skipper/manifest/main/10.10/manifest.json",
-		Priority: 80,
+		Priority: 90,
+	},
+	// Community plugins verified from awesome-jellyfin
+	{
+		Name:     "JellyScrub",
+		URL:      "https://raw.githubusercontent.com/nicknsy/jellyscrub/master/manifest.json",
+		Priority: 78,
+	},
+	{
+		Name:     "Streamyfin",
+		URL:      "https://raw.githubusercontent.com/streamyfin/jellyfin-plugin-streamyfin/main/manifest.json",
+		Priority: 75,
+	},
+	{
+		Name:     "Lyrics",
+		URL:      "https://raw.githubusercontent.com/Felitendo/jellyfin-plugin-lyrics/main/manifest.json",
+		Priority: 70,
+	},
+	{
+		Name:     "FinTube",
+		URL:      "https://raw.githubusercontent.com/AECX/FinTube/master/manifest.json",
+		Priority: 65,
 	},
 	{
 		Name:     "Ani-Sync",
 		URL:      "https://raw.githubusercontent.com/vosmiic/jellyfin-ani-sync/master/manifest.json",
 		Priority: 60,
+	},
+	{
+		Name:     "ListenBrainz",
+		URL:      "https://raw.githubusercontent.com/lyarenei/jellyfin-plugin-listenbrainz/master/manifest.json",
+		Priority: 58,
+	},
+	{
+		Name:     "AVDC Metadata",
+		URL:      "https://raw.githubusercontent.com/xjasonlyu/jellyfin-plugin-avdc/main/manifest.json",
+		Priority: 55,
+	},
+	{
+		Name:     "Intros",
+		URL:      "https://raw.githubusercontent.com/dkanada/jellyfin-plugin-intros/master/manifest.json",
+		Priority: 53,
+	},
+	{
+		Name:     "Auto Collections",
+		URL:      "https://raw.githubusercontent.com/KeksBombe/jellyfin-plugin-auto-collections/main/manifest.json",
+		Priority: 50,
 	},
 }
 
