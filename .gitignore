@@ -1,0 +1,10 @@
+bin/
+data/
+config.json
+*.db
+*.db-wal
+*.db-shm
+internal/handler/dist/
+web/node_modules/
+web/dist/
+.playwright-mcp/

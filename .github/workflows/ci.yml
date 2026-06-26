@@ -1,0 +1,122 @@
+name: CI / CD
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Lint + Test ──────────────────────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+  # ── Build binary ─────────────────────────────────────────────────────────────
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build UI
+        run: |
+          cd web && npm ci && npm run build
+          rm -rf ../internal/handler/dist
+          cp -r dist ../internal/handler/
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Build binary
+        env:
+          VERSION: ${{ github.ref_type == 'tag' && github.ref_name || 'dev' }}
+          GIT_COMMIT: ${{ github.sha }}
+        run: |
+          CGO_ENABLED=0 go build \
+            -ldflags "-s -w \
+              -X github.com/inorihimea/jellyfin-plugin-server/internal/handler.Version=${VERSION} \
+              -X github.com/inorihimea/jellyfin-plugin-server/internal/handler.GitCommit=${GIT_COMMIT:0:7}" \
+            -o bin/jellyfin-plugin-server ./cmd/server
+
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: jellyfin-plugin-server-linux-amd64
+          path: bin/jellyfin-plugin-server
+
+  # ── Docker build + push (tags only) ─────────────────────────────────────────
+  docker:
+    name: Docker
+    needs: test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}:latest
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            GIT_COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── GitHub Release (tags only) ───────────────────────────────────────────────
+  release:
+    name: Release
+    needs: [build, docker]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: jellyfin-plugin-server-linux-amd64
+          path: ./artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/jellyfin-plugin-server
+          generate_release_notes: true
