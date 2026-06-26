@@ -20,6 +20,9 @@ jobs:
           go-version: "1.22"
           cache: true
 
+      - name: Create dist stub
+        run: mkdir -p internal/handler/dist && echo "<html></html>" > internal/handler/dist/index.html
+
       - name: Vet
         run: go vet ./...
 
