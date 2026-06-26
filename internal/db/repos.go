@@ -84,18 +84,12 @@ var defaultRepos = []struct {
 	},
 }
 
-// SeedDefaultRepos inserts built-in repos if the table is empty.
+// SeedDefaultRepos upserts built-in repos by URL (INSERT OR IGNORE), so new
+// defaults are always added while user-added or user-modified repos are untouched.
 func SeedDefaultRepos() error {
-	var count int
-	if err := DB.QueryRow(`SELECT COUNT(*) FROM repos`).Scan(&count); err != nil {
-		return err
-	}
-	if count > 0 {
-		return nil
-	}
 	for _, r := range defaultRepos {
 		if _, err := DB.Exec(
-			`INSERT INTO repos (id, name, url, enabled, priority, created_at)
+			`INSERT OR IGNORE INTO repos (id, name, url, enabled, priority, created_at)
 			 VALUES (?, ?, ?, 1, ?, ?)`,
 			uuid.NewString(), r.Name, r.URL, r.Priority, Now(),
 		); err != nil {
