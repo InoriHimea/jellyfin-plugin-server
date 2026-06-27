@@ -137,6 +137,7 @@ func Get(rawURL, etag, lastMod string) (*Response, error) {
 // Reload rebuilds the client (called when proxy config changes).
 func Reload() {
 	std = buildClient()
+	streamClient = buildStreamClient()
 }
 
 // GetClient returns the configured HTTP client for direct streaming use.
@@ -145,4 +146,58 @@ func GetClient() *http.Client {
 		Init()
 	}
 	return std
+}
+
+// GetStreamClient returns a client with no overall body-read timeout, suitable
+// for proxying large plugin zip files that may take minutes to download.
+func GetStreamClient() *http.Client {
+	if streamClient == nil {
+		streamClient = buildStreamClient()
+	}
+	return streamClient
+}
+
+var streamClient *http.Client
+
+func buildStreamClient() *http.Client {
+	cfg := config.Get().Proxy
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: 60 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
+		MaxIdleConns:          10,
+	}
+
+	switch cfg.Type {
+	case config.ProxyHTTP, config.ProxyHTTPS:
+		if cfg.Address != "" {
+			proxyURLStr := string(cfg.Type) + "://"
+			if cfg.Username != "" {
+				proxyURLStr += url.UserPassword(cfg.Username, cfg.Password).String() + "@"
+			}
+			proxyURLStr += cfg.Address
+			if pu, err := url.Parse(proxyURLStr); err == nil {
+				transport.Proxy = http.ProxyURL(pu)
+			}
+		}
+	case config.ProxySOCKS5:
+		if cfg.Address != "" {
+			var auth *proxy.Auth
+			if cfg.Username != "" {
+				auth = &proxy.Auth{User: cfg.Username, Password: cfg.Password}
+			}
+			if dialer, err := proxy.SOCKS5("tcp", cfg.Address, auth, proxy.Direct); err == nil {
+				transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+					return dialer.Dial(network, addr)
+				}
+			}
+		}
+	}
+
+	// No Timeout: body reads are unlimited so large files don't get cut off.
+	return &http.Client{Transport: transport}
 }

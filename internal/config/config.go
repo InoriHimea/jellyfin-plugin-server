@@ -44,8 +44,9 @@ type AuthConfig struct {
 }
 
 type ServerConfig struct {
-	Host string `json:"host"`
-	Port int    `json:"port"`
+	Host      string `json:"host"`
+	Port      int    `json:"port"`
+	PublicURL string `json:"public_url"` // Override for manifest sourceUrl base (e.g. https://example.com:9443)
 }
 
 type Config struct {
@@ -114,6 +115,9 @@ func Load(path string) (*Config, error) {
 
 // applyEnv overrides config fields with environment variables.
 func applyEnv(cfg *Config) {
+	if v := os.Getenv("JPSERVER_PUBLIC_URL"); v != "" {
+		cfg.Server.PublicURL = v
+	}
 	if v := os.Getenv("JPSERVER_HOST"); v != "" {
 		cfg.Server.Host = v
 	}

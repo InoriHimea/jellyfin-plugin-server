@@ -64,6 +64,17 @@ export function Settings() {
               <Input type="number" value={cfg.server.port} onChange={(e) => set('server.port', +e.target.value)} />
             </div>
           </div>
+          <div className="space-y-1">
+            <Label>公开访问地址 <span className="text-muted-foreground font-normal">（必填，用于生成 Manifest 下载链接）</span></Label>
+            <Input
+              value={cfg.server.public_url}
+              onChange={(e) => set('server.public_url', e.target.value)}
+              placeholder="https://your-domain.com:9443"
+            />
+            <p className="text-xs text-muted-foreground">
+              Jellyfin 下载插件时使用此地址。若在反向代理后请务必填写外部 URL（含协议和端口），否则下载会失败。
+            </p>
+          </div>
         </CardContent>
       </Card>
 

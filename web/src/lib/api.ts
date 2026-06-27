@@ -59,7 +59,7 @@ export interface CleanResult {
 }
 
 export interface Config {
-  server: { host: string; port: number }
+  server: { host: string; port: number; public_url: string }
   storage: { data_dir: string; max_disk_mb: number; keep_versions: number; cleanup_schedule: string }
   cache: { manifest_ttl_seconds: number; max_concurrent_downloads: number }
   proxy: { type: string; address: string; username: string; password: string; no_proxy: string }

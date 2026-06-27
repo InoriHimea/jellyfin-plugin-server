@@ -119,7 +119,8 @@ func handlePackage(ctx *fasthttp.RequestCtx, checksum, filename string) {
 	}
 	req.Header.Set("User-Agent", "jellyfin-plugin-server/1.0")
 
-	resp, err := proxyClient.GetClient().Do(req)
+	// Use stream client (no body-read timeout) so large files don't get cut off.
+	resp, err := proxyClient.GetStreamClient().Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		if resp != nil {
 			resp.Body.Close()
@@ -142,14 +143,28 @@ func handlePackage(ctx *fasthttp.RequestCtx, checksum, filename string) {
 }
 
 func baseURLFromCtx(ctx *fasthttp.RequestCtx) string {
+	cfg := config.Get()
+
+	// 1. Explicit override wins — set this when behind a reverse proxy.
+	if cfg.Server.PublicURL != "" {
+		return strings.TrimRight(cfg.Server.PublicURL, "/")
+	}
+
+	// 2. Respect reverse-proxy headers (X-Forwarded-Proto / X-Forwarded-Host).
 	scheme := "http"
-	if ctx.IsTLS() {
+	if p := string(ctx.Request.Header.Peek("X-Forwarded-Proto")); p != "" {
+		scheme = p
+	} else if ctx.IsTLS() {
 		scheme = "https"
 	}
-	host := string(ctx.Host())
+
+	host := string(ctx.Request.Header.Peek("X-Forwarded-Host"))
 	if host == "" {
-		cfg := config.Get()
+		host = string(ctx.Host())
+	}
+	if host == "" {
 		host = fmt.Sprintf("localhost:%d", cfg.Server.Port)
 	}
+
 	return fmt.Sprintf("%s://%s", scheme, host)
 }

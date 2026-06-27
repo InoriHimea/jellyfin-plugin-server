@@ -174,7 +174,8 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 		if _, ok := pluginMap[guid]; !ok {
 			pluginMap[guid] = &Plugin{
 				GUID: guid, Name: name, Description: desc,
-				Overview: overview, Owner: owner, Category: cat, ImageURL: imageURL,
+				Overview: overview, Owner: owner,
+				Category: normalizeCategory(cat), ImageURL: imageURL,
 			}
 			order = append(order, guid)
 		}
@@ -242,7 +243,8 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 			seen[guid] = &pluginEntry{
 				p: &Plugin{
 					GUID: guid, Name: name, Description: desc,
-					Overview: overview, Owner: owner, Category: cat, ImageURL: imageURL,
+					Overview: overview, Owner: owner,
+					Category: normalizeCategory(cat), ImageURL: imageURL,
 				},
 				seenVersions: make(map[string]bool),
 			}
@@ -278,6 +280,34 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 // localURL builds the URL our server uses to serve (or proxy) a plugin file.
 // It always points to /plugins/packages/{checksum}/{name} so that all downloads
 // go through our server regardless of whether the file has been cached locally.
+// normalizeCategory maps community-manifest category strings to the official
+// Jellyfin category values used in repo.jellyfin.org/master/plugin/manifest.json.
+// Jellyfin 10.9+ recognises: General, MoviesAndShows, Administration, LiveTV,
+// Subtitles, Music, Books, Anime. Unknown values are mapped to General.
+func normalizeCategory(cat string) string {
+	switch strings.ToLower(strings.TrimSpace(cat)) {
+	case "general", "":
+		return "General"
+	case "moviesandshows", "movies", "shows", "metadata":
+		return "MoviesAndShows"
+	case "administration", "admin", "notifications", "notification",
+		"authentication", "auth":
+		return "Administration"
+	case "livetv", "live tv", "live-tv":
+		return "LiveTV"
+	case "subtitles", "subtitle":
+		return "Subtitles"
+	case "music":
+		return "Music"
+	case "books", "book":
+		return "Books"
+	case "anime", "animation":
+		return "Anime"
+	default:
+		return "General"
+	}
+}
+
 func localURL(base, checksum, localPath, srcURL string) string {
 	name := checksum + ".zip"
 	if localPath != "" {

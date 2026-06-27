@@ -20,12 +20,15 @@ var defaultRepos = []struct {
 	URL      string
 	Priority int
 }{
+	// Official Jellyfin plugin repository — highest priority, covers 34 plugins.
+	// Provides: Fanart, LDAP Auth, Trakt, Playback Reporting, Open Subtitles,
+	// TheTVDB, AniDB/AniList/AniSearch/Kitsu, TMDb Box Sets, Bookshelf, etc.
 	{
 		Name:     "Jellyfin Official",
-		URL:      "https://repo.jellyfin.org/releases/plugin/manifest.json",
+		URL:      "https://repo.jellyfin.org/master/plugin/manifest.json",
 		Priority: 100,
 	},
-	// Intro Skipper: version-specific manifests from intro-skipper/manifest
+	// Intro Skipper: version-specific manifests
 	{
 		Name:     "Intro Skipper (10.11)",
 		URL:      "https://raw.githubusercontent.com/intro-skipper/manifest/main/10.11/manifest.json",
@@ -36,7 +39,7 @@ var defaultRepos = []struct {
 		URL:      "https://raw.githubusercontent.com/intro-skipper/manifest/main/10.10/manifest.json",
 		Priority: 90,
 	},
-	// Community plugins verified from awesome-jellyfin
+	// Community plugins
 	{
 		Name:     "JellyScrub",
 		URL:      "https://raw.githubusercontent.com/nicknsy/jellyscrub/master/manifest.json",
@@ -48,11 +51,6 @@ var defaultRepos = []struct {
 		Priority: 75,
 	},
 	{
-		Name:     "Lyrics",
-		URL:      "https://raw.githubusercontent.com/Felitendo/jellyfin-plugin-lyrics/main/manifest.json",
-		Priority: 70,
-	},
-	{
 		Name:     "FinTube",
 		URL:      "https://raw.githubusercontent.com/AECX/FinTube/master/manifest.json",
 		Priority: 65,
@@ -60,22 +58,32 @@ var defaultRepos = []struct {
 	{
 		Name:     "Ani-Sync",
 		URL:      "https://raw.githubusercontent.com/vosmiic/jellyfin-ani-sync/master/manifest.json",
+		Priority: 63,
+	},
+	{
+		Name:     "AVDC (AV元数据)",
+		URL:      "https://raw.githubusercontent.com/xjasonlyu/jellyfin-plugin-avdc/main/manifest.json",
 		Priority: 60,
+	},
+	{
+		Name:     "MetaTube (AV元数据)",
+		URL:      "https://raw.githubusercontent.com/metatube-community/jellyfin-plugin-metatube/dist/manifest.json",
+		Priority: 58,
 	},
 	{
 		Name:     "ListenBrainz",
 		URL:      "https://raw.githubusercontent.com/lyarenei/jellyfin-plugin-listenbrainz/master/manifest.json",
-		Priority: 58,
-	},
-	{
-		Name:     "AVDC Metadata",
-		URL:      "https://raw.githubusercontent.com/xjasonlyu/jellyfin-plugin-avdc/main/manifest.json",
 		Priority: 55,
 	},
 	{
-		Name:     "Intros",
-		URL:      "https://raw.githubusercontent.com/dkanada/jellyfin-plugin-intros/master/manifest.json",
+		Name:     "Collection Import",
+		URL:      "https://raw.githubusercontent.com/lostb1t/jellyfin-plugin-collection-import/main/manifest.json",
 		Priority: 53,
+	},
+	{
+		Name:     "Intros (dkanada)",
+		URL:      "https://raw.githubusercontent.com/dkanada/jellyfin-plugin-intros/master/manifest.json",
+		Priority: 52,
 	},
 	{
 		Name:     "Auto Collections",
