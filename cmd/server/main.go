@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -53,6 +54,7 @@ func main() {
 	manifest.SetEnqueueFunc(downloader.EnqueueAllPending)
 	go downloader.EnqueueAllPending()
 	go scheduledCleanup()
+	go startupRefresh(cfg) // warm the DB on startup so /manifest is immediately populated
 	health.StartChecker(5 * time.Minute)
 
 	if err := os.MkdirAll(config.PackagesDir(), 0755); err != nil {
@@ -83,6 +85,36 @@ func main() {
 	logger.Info("waiting for in-flight downloads...")
 	downloader.Wait()
 	logger.Info("bye")
+}
+
+// startupRefresh fetches all enabled repos in parallel when the server boots.
+// It only fetches repos whose TTL has expired, so subsequent restarts are cheap.
+func startupRefresh(cfg *config.Config) {
+	repos, err := db.ListRepos()
+	if err != nil {
+		logger.Warn("startup refresh: list repos failed", map[string]any{"err": err})
+		return
+	}
+	var wg sync.WaitGroup
+	for _, r := range repos {
+		if !r.Enabled {
+			continue
+		}
+		if !manifest.IsTTLExpired(r.LastFetched, cfg.Cache.ManifestTTLSeconds) {
+			continue
+		}
+		wg.Add(1)
+		go func(r db.Repo) {
+			defer wg.Done()
+			if _, _, err := manifest.FetchAndStore(r.ID, r.URL); err != nil {
+				logger.Warn("startup refresh failed", map[string]any{"repo": r.Name, "err": err})
+			} else {
+				logger.Info("startup refresh ok", map[string]any{"repo": r.Name})
+			}
+		}(r)
+	}
+	wg.Wait()
+	logger.Info("startup refresh complete", nil)
 }
 
 // scheduledCleanup runs storage cleanup once a day at 03:00 local time.

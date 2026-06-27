@@ -71,6 +71,16 @@ var defaultRepos = []struct {
 		Priority: 58,
 	},
 	{
+		Name:     "Letterboxd Sync",
+		URL:      "https://raw.githubusercontent.com/builtbyproxy/jellyfin-plugin-letterboxd/main/manifest.json",
+		Priority: 57,
+	},
+	{
+		Name:     "MDBList Ratings",
+		URL:      "https://raw.githubusercontent.com/Druidblack/Jellyfin.Plugin.MDBList_Ratings/master/manifest.json",
+		Priority: 56,
+	},
+	{
 		Name:     "ListenBrainz",
 		URL:      "https://raw.githubusercontent.com/lyarenei/jellyfin-plugin-listenbrainz/master/manifest.json",
 		Priority: 55,

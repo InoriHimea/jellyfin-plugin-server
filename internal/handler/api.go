@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/inorihimea/jellyfin-plugin-server/internal/config"
@@ -278,19 +279,37 @@ func apiRefreshAll(ctx *fasthttp.RequestCtx) {
 		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	results := make(map[string]string)
+
+	type result struct {
+		name string
+		val  string
+	}
+	ch := make(chan result, len(repos))
+	var wg sync.WaitGroup
+
 	for _, r := range repos {
 		if !r.Enabled {
 			continue
 		}
-		db.DB.Exec(`UPDATE repos SET etag='', last_fetched='' WHERE id=?`, r.ID)
-		_, _, err := manifest.FetchAndStore(r.ID, r.URL)
-		if err != nil {
-			results[r.Name] = err.Error()
-			logger.Warn("refresh failed", map[string]any{"repo": r.Name, "err": err})
-		} else {
-			results[r.Name] = "ok"
-		}
+		wg.Add(1)
+		go func(r db.Repo) {
+			defer wg.Done()
+			db.DB.Exec(`UPDATE repos SET etag='', last_fetched='' WHERE id=?`, r.ID)
+			if _, _, err := manifest.FetchAndStore(r.ID, r.URL); err != nil {
+				logger.Warn("refresh failed", map[string]any{"repo": r.Name, "err": err})
+				ch <- result{r.Name, err.Error()}
+			} else {
+				ch <- result{r.Name, "ok"}
+			}
+		}(r)
+	}
+
+	wg.Wait()
+	close(ch)
+
+	results := make(map[string]string)
+	for res := range ch {
+		results[res.name] = res.val
 	}
 	writeJSON(ctx, fasthttp.StatusOK, results)
 }
