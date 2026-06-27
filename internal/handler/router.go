@@ -7,24 +7,25 @@ import (
 )
 
 var (
-	Version   = "v1.1.0"
+	Version   = "v1.2.1"
 	GitCommit = "unknown"
 )
 
 func Router(ctx *fasthttp.RequestCtx) {
 	path := string(ctx.Path())
 
-	// Public endpoints — Jellyfin clients poll these without credentials.
+	// Public endpoints — no auth required.
 	switch {
 	case path == "/health":
-		Health(ctx)
-		return
+		Health(ctx); return
 	case path == "/manifest":
-		handleUnifiedManifest(ctx)
-		return
+		handleUnifiedManifest(ctx); return
 	case strings.HasPrefix(path, "/plugins/"):
-		PluginRouter(ctx)
-		return
+		PluginRouter(ctx); return
+	case path == "/api/auth/login":
+		apiLogin(ctx); return
+	case path == "/api/auth/status":
+		apiAuthStatus(ctx); return
 	}
 
 	// All remaining routes (API + web UI) require auth when enabled.

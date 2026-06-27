@@ -57,6 +57,9 @@ func APIRouter(ctx *fasthttp.RequestCtx) {
 	case strings.HasPrefix(path, "/packages/") && method == "DELETE":
 		apiDeletePackage(ctx, strings.TrimPrefix(path, "/packages/"))
 
+	case path == "/auth/logout" && method == "POST":
+		apiLogout(ctx)
+
 	case path == "/catalog" && method == "GET":
 		apiCatalog(ctx)
 	case catalogDownloadPath(path) && method == "POST":

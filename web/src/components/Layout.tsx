@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Database, Package, Settings, ScrollText, Tv, BookOpen } from 'lucide-react'
-import { api } from '@/lib/api'
+import { LayoutDashboard, Database, Package, Settings, ScrollText, Tv, BookOpen, LogOut } from 'lucide-react'
+import { api, token } from '@/lib/api'
 
 const nav = [
   { to: '/', label: '仪表盘', icon: LayoutDashboard, end: true },
@@ -15,10 +15,17 @@ const nav = [
 
 export function Layout() {
   const [version, setVersion] = useState<string>('—')
+  const navigate = useNavigate()
 
   useEffect(() => {
     api.status().then((s) => setVersion(s.version)).catch(() => {})
   }, [])
+
+  const logout = async () => {
+    await api.auth.logout().catch(() => {})
+    token.clear()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <div className="flex h-screen bg-background">
@@ -61,7 +68,14 @@ export function Layout() {
         </nav>
 
         {/* Footer */}
-        <div className="p-3 border-t border-slate-800">
+        <div className="p-3 border-t border-slate-800 space-y-2">
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs text-slate-500 hover:bg-slate-800 hover:text-red-400 transition-all border border-transparent"
+          >
+            <LogOut className="h-3.5 w-3.5 shrink-0" />
+            <span>退出登录</span>
+          </button>
           <p className="text-[11px] text-slate-600 text-center font-mono">{version}</p>
         </div>
       </aside>

@@ -67,8 +67,29 @@ export interface Config {
   log_json: boolean
 }
 
+const TOKEN_KEY = 'jpserver_token'
+
+export const token = {
+  get: () => localStorage.getItem(TOKEN_KEY) ?? '',
+  set: (t: string) => localStorage.setItem(TOKEN_KEY, t),
+  clear: () => localStorage.removeItem(TOKEN_KEY),
+}
+
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(path, options)
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string>),
+  }
+  const t = token.get()
+  if (t) headers['Authorization'] = `Bearer ${t}`
+
+  const res = await fetch(path, { ...options, headers })
+
+  if (res.status === 401) {
+    token.clear()
+    window.location.href = '/login'
+    throw new Error('Session expired')
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
     throw new Error(err.error || res.statusText)
@@ -78,6 +99,21 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   status: () => req<Status>('/api/status'),
+
+  auth: {
+    status: () => fetch('/api/auth/status').then(r => r.json()) as Promise<{ enabled: boolean }>,
+    login: (username: string, password: string) =>
+      fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      }).then(async r => {
+        const data = await r.json()
+        if (!r.ok) throw new Error(data.error || r.statusText)
+        return data as { token: string }
+      }),
+    logout: () => req('/api/auth/logout', { method: 'POST' }),
+  },
 
   repos: {
     list: () => req<Repo[]>('/api/repos'),
