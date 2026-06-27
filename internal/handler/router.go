@@ -7,14 +7,14 @@ import (
 )
 
 var (
-	Version   = "v1.2.1"
+	Version   = "v1.3.1"
 	GitCommit = "unknown"
 )
 
 func Router(ctx *fasthttp.RequestCtx) {
 	path := string(ctx.Path())
 
-	// Public endpoints — no auth required.
+	// Fully public endpoints (no auth, no SPA).
 	switch {
 	case path == "/health":
 		Health(ctx); return
@@ -28,15 +28,16 @@ func Router(ctx *fasthttp.RequestCtx) {
 		apiAuthStatus(ctx); return
 	}
 
-	// All remaining routes (API + web UI) require auth when enabled.
-	if !authOK(ctx) {
+	// All non-API paths → serve the React SPA.
+	// The SPA handles /login and auth-gating itself; no server-side check here.
+	if !strings.HasPrefix(path, "/api/") {
+		ServeUI(ctx)
 		return
 	}
 
-	switch {
-	case strings.HasPrefix(path, "/api/"):
-		APIRouter(ctx)
-	default:
-		ServeUI(ctx)
+	// API routes require a valid session token.
+	if !authOK(ctx) {
+		return
 	}
+	APIRouter(ctx)
 }
