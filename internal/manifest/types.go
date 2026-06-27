@@ -10,6 +10,7 @@ type Plugin struct {
 	Overview    string    `json:"overview"`
 	Owner       string    `json:"owner"`
 	Category    string    `json:"category"`
+	ImageURL    string    `json:"imageUrl,omitempty"`
 	Versions    []Version `json:"versions"`
 }
 

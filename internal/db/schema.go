@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS plugins (
 	overview    TEXT,
 	owner       TEXT,
 	category    TEXT,
+	image_url   TEXT NOT NULL DEFAULT '',
 	UNIQUE(repo_id, guid)
 );
 

@@ -33,6 +33,9 @@ func Open(path string) error {
 		return fmt.Errorf("apply schema: %w", err)
 	}
 
+	// Migrations for existing databases — errors are ignored when column already exists.
+	db.Exec(`ALTER TABLE plugins ADD COLUMN image_url TEXT NOT NULL DEFAULT ''`)
+
 	DB = db
 	return nil
 }

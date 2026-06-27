@@ -82,14 +82,14 @@ func persistCatalog(repoID string, catalog Catalog) error {
 		if pluginID == "" {
 			pluginID = uuid.NewString()
 			_, err = tx.Exec(
-				`INSERT INTO plugins (id, repo_id, guid, name, description, overview, owner, category)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-				pluginID, repoID, p.GUID, p.Name, p.Description, p.Overview, p.Owner, p.Category,
+				`INSERT INTO plugins (id, repo_id, guid, name, description, overview, owner, category, image_url)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				pluginID, repoID, p.GUID, p.Name, p.Description, p.Overview, p.Owner, p.Category, p.ImageURL,
 			)
 		} else {
 			_, err = tx.Exec(
-				`UPDATE plugins SET name=?, description=?, overview=?, owner=?, category=? WHERE id=?`,
-				p.Name, p.Description, p.Overview, p.Owner, p.Category, pluginID,
+				`UPDATE plugins SET name=?, description=?, overview=?, owner=?, category=?, image_url=? WHERE id=?`,
+				p.Name, p.Description, p.Overview, p.Owner, p.Category, p.ImageURL, pluginID,
 			)
 		}
 		if err != nil {
@@ -142,7 +142,7 @@ func IsTTLExpired(lastFetched string, ttlSeconds int) bool {
 func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 	rows, err := db.DB.Query(
 		`SELECT p.guid, p.name, COALESCE(p.description,''), COALESCE(p.overview,''),
-		        COALESCE(p.owner,''), COALESCE(p.category,''),
+		        COALESCE(p.owner,''), COALESCE(p.category,''), COALESCE(p.image_url,''),
 		        v.version, COALESCE(v.changelog,''), COALESCE(v.target_abi,''),
 		        v.source_url, v.checksum, COALESCE(v.timestamp,''),
 		        COALESCE(v.local_path,''), v.download_status
@@ -161,11 +161,11 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 
 	for rows.Next() {
 		var (
-			guid, name, desc, overview, owner, cat string
-			ver, changelog, abi, srcURL, checksum, ts string
-			localPath, dlStatus                        string
+			guid, name, desc, overview, owner, cat, imageURL string
+			ver, changelog, abi, srcURL, checksum, ts        string
+			localPath, dlStatus                              string
 		)
-		if err := rows.Scan(&guid, &name, &desc, &overview, &owner, &cat,
+		if err := rows.Scan(&guid, &name, &desc, &overview, &owner, &cat, &imageURL,
 			&ver, &changelog, &abi, &srcURL, &checksum, &ts,
 			&localPath, &dlStatus); err != nil {
 			return nil, err
@@ -174,7 +174,7 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 		if _, ok := pluginMap[guid]; !ok {
 			pluginMap[guid] = &Plugin{
 				GUID: guid, Name: name, Description: desc,
-				Overview: overview, Owner: owner, Category: cat,
+				Overview: overview, Owner: owner, Category: cat, ImageURL: imageURL,
 			}
 			order = append(order, guid)
 		}
@@ -206,7 +206,7 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 	rows, err := db.DB.Query(
 		`SELECT p.guid, p.name, COALESCE(p.description,''), COALESCE(p.overview,''),
-		        COALESCE(p.owner,''), COALESCE(p.category,''),
+		        COALESCE(p.owner,''), COALESCE(p.category,''), COALESCE(p.image_url,''),
 		        v.version, COALESCE(v.changelog,''), COALESCE(v.target_abi,''),
 		        v.source_url, v.checksum, COALESCE(v.timestamp,''),
 		        COALESCE(v.local_path,''), v.download_status
@@ -230,11 +230,11 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 
 	for rows.Next() {
 		var (
-			guid, name, desc, overview, owner, cat    string
-			ver, changelog, abi, srcURL, checksum, ts string
-			localPath, dlStatus                        string
+			guid, name, desc, overview, owner, cat, imageURL string
+			ver, changelog, abi, srcURL, checksum, ts        string
+			localPath, dlStatus                              string
 		)
-		if err := rows.Scan(&guid, &name, &desc, &overview, &owner, &cat,
+		if err := rows.Scan(&guid, &name, &desc, &overview, &owner, &cat, &imageURL,
 			&ver, &changelog, &abi, &srcURL, &checksum, &ts,
 			&localPath, &dlStatus); err != nil {
 			return nil, err
@@ -244,7 +244,7 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 			seen[guid] = &pluginEntry{
 				p: &Plugin{
 					GUID: guid, Name: name, Description: desc,
-					Overview: overview, Owner: owner, Category: cat,
+					Overview: overview, Owner: owner, Category: cat, ImageURL: imageURL,
 				},
 				seenVersions: make(map[string]bool),
 			}
