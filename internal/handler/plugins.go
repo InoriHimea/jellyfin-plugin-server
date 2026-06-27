@@ -3,12 +3,16 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 
 	"github.com/inorihimea/jellyfin-plugin-server/internal/config"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/db"
+	"github.com/inorihimea/jellyfin-plugin-server/internal/downloader"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/logger"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/manifest"
+	proxyClient "github.com/inorihimea/jellyfin-plugin-server/internal/proxy"
 	"github.com/valyala/fasthttp"
 )
 
@@ -62,9 +66,9 @@ func handleManifest(ctx *fasthttp.RequestCtx, repoID string) {
 		if _, _, err := manifest.FetchAndStore(repo.ID, repo.URL); err != nil {
 			logger.Warn("upstream fetch failed, serving stale", map[string]any{"err": err, "repo": repo.Name})
 		}
-		db.RecordCacheAccess(false) // upstream fetch = miss
+		db.RecordCacheAccess(false)
 	} else {
-		db.RecordCacheAccess(true) // TTL still valid = hit
+		db.RecordCacheAccess(true)
 	}
 
 	baseURL := baseURLFromCtx(ctx)
@@ -81,25 +85,60 @@ func handleManifest(ctx *fasthttp.RequestCtx, repoID string) {
 	ctx.SetBody(b)
 }
 
+// handlePackage serves plugin zip files.
+// If the file is cached locally it is served from disk.
+// Otherwise it is streamed from the upstream URL through our configured proxy,
+// and a background download is triggered so subsequent requests are served locally.
 func handlePackage(ctx *fasthttp.RequestCtx, checksum, filename string) {
-	var localPath, sourceURL, dlStatus string
+	var versionID, localPath, sourceURL, dlStatus string
 	err := db.DB.QueryRow(
-		`SELECT COALESCE(local_path,''), source_url, download_status
+		`SELECT id, COALESCE(local_path,''), source_url, download_status
 		 FROM plugin_versions WHERE checksum=?`, checksum,
-	).Scan(&localPath, &sourceURL, &dlStatus)
+	).Scan(&versionID, &localPath, &sourceURL, &dlStatus)
 
 	if err != nil {
 		writeJSON(ctx, fasthttp.StatusNotFound, map[string]string{"error": "package not found"})
 		return
 	}
 
+	// Fast path: already cached on disk.
 	if dlStatus == "done" && localPath != "" {
 		fasthttp.ServeFile(ctx, localPath)
 		return
 	}
 
-	// Fallback: redirect to upstream
-	ctx.Redirect(sourceURL, fasthttp.StatusFound)
+	// Slow path: stream from upstream via our configured proxy.
+	// Simultaneously enqueue a background download so it lands on disk for next time.
+	downloader.Enqueue(versionID, checksum, sourceURL, filename)
+
+	req, err := http.NewRequest(http.MethodGet, sourceURL, nil)
+	if err != nil {
+		logger.Error("build upstream request failed", map[string]any{"err": err, "url": sourceURL})
+		ctx.Redirect(sourceURL, fasthttp.StatusFound)
+		return
+	}
+	req.Header.Set("User-Agent", "jellyfin-plugin-server/1.0")
+
+	resp, err := proxyClient.GetClient().Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		logger.Warn("upstream stream failed, redirecting", map[string]any{"err": err, "url": sourceURL})
+		ctx.Redirect(sourceURL, fasthttp.StatusFound)
+		return
+	}
+	defer resp.Body.Close()
+
+	ctx.SetContentType("application/zip")
+	if cl := resp.Header.Get("Content-Length"); cl != "" {
+		ctx.Response.Header.Set("Content-Length", cl)
+	}
+	ctx.Response.Header.Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+
+	if _, err := io.Copy(ctx.Response.BodyWriter(), resp.Body); err != nil {
+		logger.Warn("stream copy interrupted", map[string]any{"err": err})
+	}
 }
 
 func baseURLFromCtx(ctx *fasthttp.RequestCtx) string {

@@ -179,10 +179,8 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 			order = append(order, guid)
 		}
 
-		resolvedURL := srcURL
-		if dlStatus == "done" && localPath != "" {
-			resolvedURL = localURL(baseURL, checksum, localPath)
-		}
+		// Always use our server URL — handlePackage streams from upstream if not cached.
+		resolvedURL := localURL(baseURL, checksum, localPath, srcURL)
 
 		pluginMap[guid].Versions = append(pluginMap[guid].Versions, Version{
 			Version:   ver,
@@ -257,10 +255,8 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 		}
 		e.seenVersions[ver] = true
 
-		resolvedURL := srcURL
-		if dlStatus == "done" && localPath != "" {
-			resolvedURL = localURL(baseURL, checksum, localPath)
-		}
+		// Always use our server URL — handlePackage streams from upstream if not cached.
+		resolvedURL := localURL(baseURL, checksum, localPath, srcURL)
 
 		e.p.Versions = append(e.p.Versions, Version{
 			Version:   ver,
@@ -279,12 +275,26 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 	return catalog, nil
 }
 
-func localURL(base, checksum, localPath string) string {
-	// extract filename from localPath
-	idx := strings.LastIndex(localPath, "/")
-	name := localPath
-	if idx >= 0 {
-		name = localPath[idx+1:]
+// localURL builds the URL our server uses to serve (or proxy) a plugin file.
+// It always points to /plugins/packages/{checksum}/{name} so that all downloads
+// go through our server regardless of whether the file has been cached locally.
+func localURL(base, checksum, localPath, srcURL string) string {
+	name := checksum + ".zip"
+	if localPath != "" {
+		if idx := strings.LastIndex(localPath, "/"); idx >= 0 {
+			name = localPath[idx+1:]
+		}
+	} else if srcURL != "" {
+		// Derive filename from upstream URL, strip query params.
+		if idx := strings.LastIndex(srcURL, "/"); idx >= 0 && idx < len(srcURL)-1 {
+			raw := srcURL[idx+1:]
+			if qi := strings.IndexByte(raw, '?'); qi >= 0 {
+				raw = raw[:qi]
+			}
+			if raw != "" {
+				name = raw
+			}
+		}
 	}
 	return fmt.Sprintf("%s/plugins/packages/%s/%s", strings.TrimRight(base, "/"), checksum, name)
 }

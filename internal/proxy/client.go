@@ -138,3 +138,11 @@ func Get(rawURL, etag, lastMod string) (*Response, error) {
 func Reload() {
 	std = buildClient()
 }
+
+// GetClient returns the configured HTTP client for direct streaming use.
+func GetClient() *http.Client {
+	if std == nil {
+		Init()
+	}
+	return std
+}
