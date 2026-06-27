@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -19,7 +20,12 @@ import (
 )
 
 func main() {
-	cfgFile := "config.json"
+	// Resolve config path inside the data dir so it survives container restarts.
+	dataDir := "./data"
+	if v := os.Getenv("JPSERVER_DATA_DIR"); v != "" {
+		dataDir = v
+	}
+	cfgFile := filepath.Join(dataDir, "config.json")
 	if v := os.Getenv("JPSERVER_CONFIG"); v != "" {
 		cfgFile = v
 	}

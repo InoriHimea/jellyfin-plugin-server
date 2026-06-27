@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
 import { Dashboard } from '@/pages/Dashboard'
+import { Catalog } from '@/pages/Catalog'
 import { Repos } from '@/pages/Repos'
 import { Packages } from '@/pages/Packages'
 import { Logs } from '@/pages/Logs'
@@ -13,6 +14,7 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
+          <Route path="catalog" element={<Catalog />} />
           <Route path="repos" element={<Repos />} />
           <Route path="packages" element={<Packages />} />
           <Route path="logs" element={<Logs />} />

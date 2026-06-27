@@ -8,6 +8,7 @@ import (
 
 	"github.com/inorihimea/jellyfin-plugin-server/internal/config"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/db"
+	"github.com/inorihimea/jellyfin-plugin-server/internal/downloader"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/logger"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/manifest"
 	proxyClient "github.com/inorihimea/jellyfin-plugin-server/internal/proxy"
@@ -55,6 +56,11 @@ func APIRouter(ctx *fasthttp.RequestCtx) {
 		apiCleanupPackages(ctx)
 	case strings.HasPrefix(path, "/packages/") && method == "DELETE":
 		apiDeletePackage(ctx, strings.TrimPrefix(path, "/packages/"))
+
+	case path == "/catalog" && method == "GET":
+		apiCatalog(ctx)
+	case catalogDownloadPath(path) && method == "POST":
+		apiCatalogDownload(ctx, catalogGUID(path))
 
 	default:
 		writeJSON(ctx, fasthttp.StatusNotFound, map[string]string{"error": "not found"})
@@ -353,4 +359,95 @@ func apiCleanupPackages(ctx *fasthttp.RequestCtx) {
 
 func isUniqueErr(err error) bool {
 	return strings.Contains(err.Error(), "UNIQUE constraint failed")
+}
+
+// ---- catalog ----
+
+func catalogDownloadPath(path string) bool {
+	trimmed := strings.TrimPrefix(path, "/catalog/")
+	return strings.HasPrefix(path, "/catalog/") && strings.HasSuffix(trimmed, "/download") && trimmed != "/download"
+}
+
+func catalogGUID(path string) string {
+	trimmed := strings.TrimPrefix(path, "/catalog/")
+	return strings.TrimSuffix(trimmed, "/download")
+}
+
+type catalogEntry struct {
+	GUID          string `json:"guid"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Overview      string `json:"overview"`
+	Owner         string `json:"owner"`
+	Category      string `json:"category"`
+	RepoName      string `json:"repo_name"`
+	VersionID     string `json:"version_id"`
+	LatestVersion string `json:"latest_version"`
+	LatestStatus  string `json:"latest_status"`
+	VersionCount  int    `json:"version_count"`
+}
+
+func apiCatalog(ctx *fasthttp.RequestCtx) {
+	rows, err := db.DB.Query(`
+		SELECT p.guid, p.name, COALESCE(p.description,''), COALESCE(p.overview,''),
+		       COALESCE(p.owner,''), COALESCE(p.category,''), r.name,
+		       COALESCE((SELECT pv.id FROM plugin_versions pv WHERE pv.plugin_id=p.id ORDER BY pv.timestamp DESC LIMIT 1),''),
+		       COALESCE((SELECT pv.version FROM plugin_versions pv WHERE pv.plugin_id=p.id ORDER BY pv.timestamp DESC LIMIT 1),''),
+		       COALESCE((SELECT pv.download_status FROM plugin_versions pv WHERE pv.plugin_id=p.id ORDER BY pv.timestamp DESC LIMIT 1),''),
+		       (SELECT COUNT(*) FROM plugin_versions WHERE plugin_id=p.id)
+		FROM plugins p
+		JOIN repos r ON r.id=p.repo_id
+		WHERE r.enabled=1
+		ORDER BY r.priority DESC, p.guid
+	`)
+	if err != nil {
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	seen := make(map[string]bool)
+	var entries []catalogEntry
+	for rows.Next() {
+		var e catalogEntry
+		if err := rows.Scan(&e.GUID, &e.Name, &e.Description, &e.Overview,
+			&e.Owner, &e.Category, &e.RepoName,
+			&e.VersionID, &e.LatestVersion, &e.LatestStatus, &e.VersionCount); err != nil {
+			continue
+		}
+		if seen[e.GUID] {
+			continue
+		}
+		seen[e.GUID] = true
+		entries = append(entries, e)
+	}
+	if entries == nil {
+		entries = []catalogEntry{}
+	}
+	writeJSON(ctx, fasthttp.StatusOK, entries)
+}
+
+func apiCatalogDownload(ctx *fasthttp.RequestCtx, guid string) {
+	var versionID, checksum, sourceURL string
+	err := db.DB.QueryRow(`
+		SELECT pv.id, pv.checksum, pv.source_url
+		FROM plugin_versions pv
+		JOIN plugins p ON p.id=pv.plugin_id
+		JOIN repos r ON r.id=p.repo_id
+		WHERE p.guid=? AND r.enabled=1
+		ORDER BY r.priority DESC, pv.timestamp DESC LIMIT 1
+	`, guid).Scan(&versionID, &checksum, &sourceURL)
+	if err != nil {
+		writeJSON(ctx, fasthttp.StatusNotFound, map[string]string{"error": "plugin not found"})
+		return
+	}
+	// Reset failed so it can be retried
+	db.DB.Exec(`UPDATE plugin_versions SET download_status='pending' WHERE id=? AND download_status='failed'`, versionID)
+	idx := strings.LastIndex(sourceURL, "/")
+	filename := checksum + ".zip"
+	if idx >= 0 && idx < len(sourceURL)-1 {
+		filename = sourceURL[idx+1:]
+	}
+	downloader.Enqueue(versionID, checksum, sourceURL, filename)
+	writeJSON(ctx, fasthttp.StatusOK, map[string]string{"status": "queued"})
 }

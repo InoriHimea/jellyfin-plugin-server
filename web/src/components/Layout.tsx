@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, Database, Package, Settings, ScrollText, Tv } from 'lucide-react'
+import { LayoutDashboard, Database, Package, Settings, ScrollText, Tv, BookOpen } from 'lucide-react'
 import { api } from '@/lib/api'
 
 const nav = [
   { to: '/', label: '仪表盘', icon: LayoutDashboard, end: true },
+  { to: '/catalog', label: '插件目录', icon: BookOpen },
   { to: '/repos', label: '仓库管理', icon: Database },
   { to: '/packages', label: '插件包', icon: Package },
   { to: '/logs', label: '操作日志', icon: ScrollText },
@@ -21,12 +22,20 @@ export function Layout() {
 
   return (
     <div className="flex h-screen bg-background">
-      <aside className="w-56 border-r flex flex-col">
-        <div className="flex items-center gap-2 px-4 py-4 border-b">
-          <Tv className="h-5 w-5 text-primary" />
-          <span className="font-semibold text-sm">Jellyfin Plugin Server</span>
+      <aside className="w-56 flex flex-col bg-slate-900 border-r border-slate-800">
+        {/* Brand */}
+        <div className="flex items-center gap-3 px-4 py-5 border-b border-slate-800">
+          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center shadow-lg shadow-blue-900/40">
+            <Tv className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <p className="font-semibold text-sm text-white leading-none">Plugin Server</p>
+            <p className="text-[10px] text-slate-500 mt-0.5">Jellyfin</p>
+          </div>
         </div>
-        <nav className="flex-1 p-2 space-y-1">
+
+        {/* Nav */}
+        <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
           {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
@@ -34,20 +43,26 @@ export function Layout() {
               end={end}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-150 border',
                   isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    ? 'bg-blue-500/15 text-blue-400 border-blue-500/30 shadow-sm'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100 border-transparent'
                 )
               }
             >
-              <Icon className="h-4 w-4" />
-              {label}
+              {({ isActive }) => (
+                <>
+                  <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-blue-400' : '')} />
+                  <span>{label}</span>
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
-        <div className="p-3 border-t">
-          <p className="text-xs text-muted-foreground text-center">{version}</p>
+
+        {/* Footer */}
+        <div className="p-3 border-t border-slate-800">
+          <p className="text-[11px] text-slate-600 text-center font-mono">{version}</p>
         </div>
       </aside>
 

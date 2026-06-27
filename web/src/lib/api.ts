@@ -37,6 +37,20 @@ export interface Status {
   disk_used_mb: number
 }
 
+export interface CatalogEntry {
+  guid: string
+  name: string
+  description: string
+  overview: string
+  owner: string
+  category: string
+  repo_name: string
+  version_id: string
+  latest_version: string
+  latest_status: 'pending' | 'downloading' | 'done' | 'failed' | ''
+  version_count: number
+}
+
 export interface CleanResult {
   lru_removed: string[]
   orphan_removed: string[]
@@ -91,5 +105,10 @@ export const api = {
   config: {
     get: () => req<Config>('/api/config'),
     update: (data: Config) => req('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  },
+
+  catalog: {
+    list: () => req<CatalogEntry[]>('/api/catalog'),
+    download: (guid: string) => req<{ status: string }>(`/api/catalog/${guid}/download`, { method: 'POST' }),
   },
 }
