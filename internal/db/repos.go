@@ -20,13 +20,19 @@ var defaultRepos = []struct {
 	URL      string
 	Priority int
 }{
-	// Official Jellyfin plugin repository — highest priority, covers 34 plugins.
-	// Provides: Fanart, LDAP Auth, Trakt, Playback Reporting, Open Subtitles,
-	// TheTVDB, AniDB/AniList/AniSearch/Kitsu, TMDb Box Sets, Bookshelf, etc.
+	// Jellyfin official repos — stable (34 plugins) and unstable/nightly (35 plugins).
+	// Stable covers: Fanart, LDAP Auth, Trakt, Open Subtitles, TheTVDB, AniDB/AniList/
+	// AniSearch/Kitsu, TMDb Box Sets, Bookshelf, Playback Reporting, Webhook, etc.
+	// Unstable adds: Cover Art Archive, Artwork, and preview builds of stable plugins.
 	{
-		Name:     "Jellyfin Official",
+		Name:     "Jellyfin Official (Stable)",
 		URL:      "https://repo.jellyfin.org/master/plugin/manifest.json",
 		Priority: 100,
+	},
+	{
+		Name:     "Jellyfin Official (Unstable / Nightly)",
+		URL:      "https://repo.jellyfin.org/master/plugin-unstable/manifest.json",
+		Priority: 98,
 	},
 	// Intro Skipper: version-specific manifests
 	{
@@ -108,7 +114,13 @@ var defaultRepos = []struct {
 		URL:      "https://github.com/cxfksword/jellyfin-plugin-metashark/releases/download/manifest/manifest.json",
 		Priority: 48,
 	},
-	// Danmu: 635⭐, Chinese danmaku/弹幕 overlay
+	// Danmu: 635⭐, Chinese danmaku/弹幕 overlay.
+	// manifest_cn.json points to CN-optimised download mirrors (faster from mainland).
+	{
+		Name:     "Danmu (弹幕, CN)",
+		URL:      "https://github.com/cxfksword/jellyfin-plugin-danmu/releases/download/manifest/manifest_cn.json",
+		Priority: 47,
+	},
 	{
 		Name:     "Danmu (弹幕)",
 		URL:      "https://github.com/cxfksword/jellyfin-plugin-danmu/releases/download/manifest/manifest.json",
@@ -149,6 +161,12 @@ var defaultRepos = []struct {
 		Name:     "InPlayer Episode Preview",
 		URL:      "https://raw.githubusercontent.com/Namo2/InPlayerEpisodePreview/master/manifest.json",
 		Priority: 36,
+	},
+	// IAmParadox27: File Transformation + Plugin Pages + Home Screen Sections (UI framework)
+	{
+		Name:     "IAmParadox27 (UI Framework)",
+		URL:      "https://raw.githubusercontent.com/IAmParadox27/jellyfin-plugin-repo/main/manifest-cache.json",
+		Priority: 35,
 	},
 
 	// ── Subtitles ──────────────────────────────────────────────────────────────
@@ -199,6 +217,12 @@ var defaultRepos = []struct {
 		Name:     "Mind the Gaps (缺集检测)",
 		URL:      "https://raw.githubusercontent.com/IDisposable/jellyfin-plugin-mindthegaps/main/manifest.json",
 		Priority: 22,
+	},
+	// trakt-ex: InoriHimea's extended Trakt fork with additional sync features
+	{
+		Name:     "Trakt Extended (trakt-ex)",
+		URL:      "https://raw.githubusercontent.com/InoriHimea/jellyfin-plugin-trakt-ex/master/repo/manifest.json",
+		Priority: 20,
 	},
 }
 
