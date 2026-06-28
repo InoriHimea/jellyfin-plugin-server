@@ -108,6 +108,13 @@ var defaultRepos = []struct {
 	},
 
 	// ── 中文 / Chinese metadata ────────────────────────────────────────────────
+	// Bangumi (番组计划): kookxiang's implementation, self-hosted at kookxiang.dev
+	// Uses repository.json filename — valid Jellyfin manifest format, 21 versions
+	{
+		Name:     "Bangumi (番组计划)",
+		URL:      "https://jellyfin-plugin-bangumi.kookxiang.dev/repository.json",
+		Priority: 49,
+	},
 	// MetaShark: 2080⭐, Douban + TMDb dual-source Chinese metadata
 	{
 		Name:     "MetaShark (豆瓣+TMDb)",
