@@ -284,6 +284,74 @@ var defaultRepos = []struct {
 		URL:      "https://raw.githubusercontent.com/InoriHimea/jellyfin-plugin-trakt-ex/master/repo/manifest.json",
 		Priority: 20,
 	},
+
+	// ── Anime metadata ──────────────────────────────────────────────────────────
+	// Shikimori: Russian anime tracker — metadata + watch state sync
+	{
+		Name:     "Shikimori (俄罗斯动漫追踪)",
+		URL:      "https://raw.githubusercontent.com/te9c/jellyfin-plugin-shikimori/main/manifest.json",
+		Priority: 18,
+	},
+	// AnimeMultiSource: aggregate anime metadata from multiple providers in one pass
+	{
+		Name:     "Anime Multi Source",
+		URL:      "https://raw.githubusercontent.com/webbster64/jellyfin-plugin-AnimeMultiSource/main/manifest.json",
+		Priority: 16,
+	},
+
+	// ── Letterboxd (alternative implementation) ────────────────────────────────
+	// Gizmo091 variant — maintained separately from builtbyproxy
+	{
+		Name:     "Letterboxd Sync (Gizmo091)",
+		URL:      "https://raw.githubusercontent.com/Gizmo091/jellyfin-plugin-letterboxd-sync/master/manifest.json",
+		Priority: 14,
+	},
+
+	// ── Broadcast / scheduling ─────────────────────────────────────────────────
+	// Air Times: show broadcast air times and next-episode countdowns
+	{
+		Name:     "Air Times (播出时间)",
+		URL:      "https://raw.githubusercontent.com/k0d13/jellyfin-air-times/main/manifest.json",
+		Priority: 12,
+	},
+
+	// ── Discovery & recommendations ────────────────────────────────────────────
+	{
+		Name:     "Local Recommendations",
+		URL:      "https://raw.githubusercontent.com/rdpharr/jellyfin-plugin-localrecs/main/manifest.json",
+		Priority: 10,
+	},
+
+	// ── UI tweaks ──────────────────────────────────────────────────────────────
+	{
+		Name:     "Jellyfin Tweaks",
+		URL:      "https://raw.githubusercontent.com/n00bcodr/JellyfinTweaks/main/manifest.json",
+		Priority: 8,
+	},
+
+	// ── AI subtitles ───────────────────────────────────────────────────────────
+	// WhisperSubs: on-device speech-to-text subtitle generation via OpenAI Whisper
+	{
+		Name:     "WhisperSubs (AI字幕生成)",
+		URL:      "https://raw.githubusercontent.com/GeiserX/whisper-subs/main/manifest.json",
+		Priority: 6,
+	},
+
+	// ── Artwork ────────────────────────────────────────────────────────────────
+	// ArtworkMultiSource: fetch artwork from multiple providers simultaneously
+	{
+		Name:     "Artwork Multi Source",
+		URL:      "https://raw.githubusercontent.com/Druidblack/Jellyfin.Plugin.ArtworkMultiSource/main/manifest.json",
+		Priority: 4,
+	},
+
+	// ── Russian metadata ───────────────────────────────────────────────────────
+	// KinoPoisk: Russian movie database metadata (Яндекс КиноПоиск)
+	{
+		Name:     "КиноПоиск (KinoPoisk)",
+		URL:      "https://raw.githubusercontent.com/LinFor/jellyfin-plugin-kinopoisk/master/dist/manifest.json",
+		Priority: 2,
+	},
 }
 
 // SeedDefaultRepos upserts built-in repos by URL (INSERT OR IGNORE), so new
