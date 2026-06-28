@@ -352,6 +352,52 @@ var defaultRepos = []struct {
 		URL:      "https://raw.githubusercontent.com/LinFor/jellyfin-plugin-kinopoisk/master/dist/manifest.json",
 		Priority: 2,
 	},
+
+	// ── TMDb extended ──────────────────────────────────────────────────────────
+	// TMDbPlus: enhanced TMDb metadata with extra fields (cxfksword)
+	{
+		Name:     "TMDbPlus",
+		URL:      "https://github.com/cxfksword/jellyfin-plugin-tmdbplus/releases/download/manifest/manifest.json",
+		Priority: 1,
+	},
+
+	// ── Poster enhancement ─────────────────────────────────────────────────────
+	// BetterPoster: auto-selects best available poster art for each item
+	{
+		Name:     "Btttr Posters Plugin",
+		URL:      "https://raw.githubusercontent.com/TheAceOfficials/BetterPoster-for-Jellyfin/main/manifest.json",
+		Priority: -1,
+	},
+
+	// ── IPTV / STRM / live sources ─────────────────────────────────────────────
+	// AniLiberty: create STRM files for AniLibria streaming anime
+	{
+		Name:     "AniLiberty STRM Plugin",
+		URL:      "https://queukat.github.io/AniLibriaStrmPlugin/plugins/manifest.json",
+		Priority: -3,
+	},
+	// JellySTRMprobe + Xtream Library (firestaerter3 repo)
+	{
+		Name:     "JellySTRMprobe + Xtream Library",
+		URL:      "https://firestaerter3.github.io/jellyfin-plugin-repo/manifest.json",
+		Priority: -5,
+	},
+
+	// ── German public broadcast ────────────────────────────────────────────────
+	// Mediathek Downloader: download content from German ARD/ZDF Mediathek
+	{
+		Name:     "Mediathek Downloader",
+		URL:      "https://raw.githubusercontent.com/CatNoir2006/jellyfin-plugin-manifest/main/manifest.json",
+		Priority: -7,
+	},
+
+	// ── Transcoding UX ─────────────────────────────────────────────────────────
+	// Transcode Nag: warn users when direct play is available instead of transcoding
+	{
+		Name:     "Transcode Nag",
+		URL:      "https://raw.githubusercontent.com/voc0der/jellyfin-transcode-nag/main/manifest.json",
+		Priority: -9,
+	},
 }
 
 // SeedDefaultRepos upserts built-in repos by URL (INSERT OR IGNORE), so new
