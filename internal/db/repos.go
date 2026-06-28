@@ -215,6 +215,30 @@ var defaultRepos = []struct {
 		URL:      "https://raw.githubusercontent.com/ankenyr/jellyfin-plugin-repo/master/manifest.json",
 		Priority: 30,
 	},
+	// TMDb Trailers: dedicated trailer channel from TMDb
+	{
+		Name:     "TMDb Trailers",
+		URL:      "https://raw.githubusercontent.com/crobibero/jellyfin-plugin-tmdb-trailers/master/manifest.json",
+		Priority: 29,
+	},
+	// AnimeThemes: fetch anime OP/ED theme songs from animethemes.moe
+	{
+		Name:     "AnimeThemes (动漫OP/ED)",
+		URL:      "https://raw.githubusercontent.com/EusthEnoptEron/jellyfin-plugin-animethemes/main/manifest.json",
+		Priority: 27,
+	},
+	// TheSportsDB: sports event metadata (leagues, teams, events)
+	{
+		Name:     "TheSportsDB (体育赛事)",
+		URL:      "https://raw.githubusercontent.com/retrorat1/Jellyfin.Plugin.TheSportsDB/main/manifest.json",
+		Priority: 25,
+	},
+	// Episode Poster Generator: auto-generate episode posters from screenshots
+	{
+		Name:     "Episode Poster Generator",
+		URL:      "https://raw.githubusercontent.com/JPKribs/jellyfin-plugin-episodepostergenerator/master/manifest.json",
+		Priority: 23,
+	},
 
 	// ── Scrobbling ─────────────────────────────────────────────────────────────
 	{
@@ -234,6 +258,17 @@ var defaultRepos = []struct {
 		Name:     "Discord Notifier",
 		URL:      "https://raw.githubusercontent.com/cedev-1/jellyfin-plugin-DiscordNotifier/main/manifest.json",
 		Priority: 24,
+	},
+	{
+		Name:     "Telegram Notifier",
+		URL:      "https://raw.githubusercontent.com/RomainPierre7/jellyfin-plugin-TelegramNotifier/main/manifest.json",
+		Priority: 21,
+	},
+	// Newsletter: generate and send email digests of new library additions
+	{
+		Name:     "Newsletters (邮件摘要)",
+		URL:      "https://raw.githubusercontent.com/Cloud9Developer/Jellyfin-Newsletter-Plugin/master/manifest.json",
+		Priority: 19,
 	},
 
 	// ── Library management ─────────────────────────────────────────────────────
