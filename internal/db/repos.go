@@ -100,6 +100,106 @@ var defaultRepos = []struct {
 		URL:      "https://raw.githubusercontent.com/KeksBombe/jellyfin-plugin-auto-collections/main/manifest.json",
 		Priority: 50,
 	},
+
+	// ── 中文 / Chinese metadata ────────────────────────────────────────────────
+	// MetaShark: 2080⭐, Douban + TMDb dual-source Chinese metadata
+	{
+		Name:     "MetaShark (豆瓣+TMDb)",
+		URL:      "https://github.com/cxfksword/jellyfin-plugin-metashark/releases/download/manifest/manifest.json",
+		Priority: 48,
+	},
+	// Danmu: 635⭐, Chinese danmaku/弹幕 overlay
+	{
+		Name:     "Danmu (弹幕)",
+		URL:      "https://github.com/cxfksword/jellyfin-plugin-danmu/releases/download/manifest/manifest.json",
+		Priority: 46,
+	},
+	// Douban: 663⭐, standalone Douban metadata provider
+	{
+		Name:     "Douban (豆瓣)",
+		URL:      "https://github.com/Libitum/jellyfin-plugin-douban/releases/latest/download/manifest.json",
+		Priority: 44,
+	},
+
+	// ── Auth / SSO ─────────────────────────────────────────────────────────────
+	// SSO: 1454⭐, SAML/OpenID Single Sign-On; manifest on manifest-release branch
+	{
+		Name:     "SSO Authentication",
+		URL:      "https://raw.githubusercontent.com/9p4/jellyfin-plugin-sso/manifest-release/manifest.json",
+		Priority: 42,
+	},
+
+	// ── Anime ─────────────────────────────────────────────────────────────────
+	// Shokofin: 289⭐, AniDB-backed anime library management; metadata/stable branch
+	{
+		Name:     "Shokofin (AniDB)",
+		URL:      "https://raw.githubusercontent.com/ShokoAnime/Shokofin/metadata/stable/manifest.json",
+		Priority: 40,
+	},
+
+	// ── UI / Player ────────────────────────────────────────────────────────────
+	// danieladov multi-repo: Merge Versions (638⭐) + Theme Songs (158⭐) + Skin Manager (419⭐)
+	{
+		Name:     "Merge Versions + Theme Songs + Skin Manager",
+		URL:      "https://raw.githubusercontent.com/danieladov/JellyfinPluginManifest/master/manifest.json",
+		Priority: 38,
+	},
+	// InPlayerEpisodePreview: 383⭐, chapter/episode preview thumbnails inside the player
+	{
+		Name:     "InPlayer Episode Preview",
+		URL:      "https://raw.githubusercontent.com/Namo2/InPlayerEpisodePreview/master/manifest.json",
+		Priority: 36,
+	},
+
+	// ── Subtitles ──────────────────────────────────────────────────────────────
+	// SubBuzz: multi-source subtitle downloader, versioned per Jellyfin version
+	{
+		Name:     "SubBuzz (10.11, multi-source subs)",
+		URL:      "https://raw.githubusercontent.com/josdion/subbuzz/master/repo/jellyfin_10.11.json",
+		Priority: 34,
+	},
+
+	// ── Metadata / Library tools ───────────────────────────────────────────────
+	// Viperinius: NFO Chapters + Spotify playlist import in one manifest
+	{
+		Name:     "NFO Chapters + Spotify Import",
+		URL:      "https://raw.githubusercontent.com/Viperinius/jellyfin-plugins/master/manifest.json",
+		Priority: 32,
+	},
+	// ankenyr: YouTube Metadata + Smart Playlist
+	{
+		Name:     "YouTube Metadata + Smart Playlist",
+		URL:      "https://raw.githubusercontent.com/ankenyr/jellyfin-plugin-repo/master/manifest.json",
+		Priority: 30,
+	},
+
+	// ── Scrobbling ─────────────────────────────────────────────────────────────
+	{
+		Name:     "Last.fm Scrobbler",
+		URL:      "https://raw.githubusercontent.com/pepebarrascout/jellyfin-plugin-lastfm/main/manifest.json",
+		Priority: 28,
+	},
+	// MediaTracker: sync with self-hosted MediaTracker (alternative to Trakt)
+	{
+		Name:     "MediaTracker Sync",
+		URL:      "https://raw.githubusercontent.com/bonukai/jellyfin-plugin-mediatracker/main/manifest.json",
+		Priority: 26,
+	},
+
+	// ── Notifications ──────────────────────────────────────────────────────────
+	{
+		Name:     "Discord Notifier",
+		URL:      "https://raw.githubusercontent.com/cedev-1/jellyfin-plugin-DiscordNotifier/main/manifest.json",
+		Priority: 24,
+	},
+
+	// ── Library management ─────────────────────────────────────────────────────
+	// Mind the Gaps: scan for missing episodes in library
+	{
+		Name:     "Mind the Gaps (缺集检测)",
+		URL:      "https://raw.githubusercontent.com/IDisposable/jellyfin-plugin-mindthegaps/main/manifest.json",
+		Priority: 22,
+	},
 }
 
 // SeedDefaultRepos upserts built-in repos by URL (INSERT OR IGNORE), so new
