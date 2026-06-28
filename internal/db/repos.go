@@ -148,6 +148,18 @@ var defaultRepos = []struct {
 		URL:      "https://raw.githubusercontent.com/ShokoAnime/Shokofin/metadata/stable/manifest.json",
 		Priority: 40,
 	},
+	// MyAnimeList metadata provider
+	{
+		Name:     "MyAnimeList",
+		URL:      "https://raw.githubusercontent.com/ryandash/jellyfin-plugin-myanimelist/main/manifest.json",
+		Priority: 39,
+	},
+	// MyAnimeSync: watch history sync to MyAnimeList
+	{
+		Name:     "MyAnimeSync",
+		URL:      "https://raw.githubusercontent.com/iankiller77/MyAnimeSync/main/manifest.json",
+		Priority: 38,
+	},
 
 	// ── UI / Player ────────────────────────────────────────────────────────────
 	// danieladov multi-repo: Merge Versions (638⭐) + Theme Songs (158⭐) + Skin Manager (419⭐)
@@ -167,6 +179,12 @@ var defaultRepos = []struct {
 		Name:     "IAmParadox27 (UI Framework)",
 		URL:      "https://raw.githubusercontent.com/IAmParadox27/jellyfin-plugin-repo/main/manifest-cache.json",
 		Priority: 35,
+	},
+	// LizardByte: Themerr — auto-add theme songs via ThemerrDB (GitHub Pages hosted)
+	{
+		Name:     "LizardByte (Themerr)",
+		URL:      "https://lizardbyte.github.io/jellyfin-plugin-repo/manifest.json",
+		Priority: 33,
 	},
 
 	// ── Subtitles ──────────────────────────────────────────────────────────────
