@@ -407,6 +407,165 @@ var defaultRepos = []struct {
 		URL:      "https://raw.githubusercontent.com/ConfusedPolarBear/intro-skipper/master/manifest.json",
 		Priority: -11,
 	},
+	// TheIntroDB: alternative intro-skip using TheIntroDB.com crowd-sourced timestamps
+	{
+		Name:     "TheIntroDB (跳片头)",
+		URL:      "https://raw.githubusercontent.com/TheIntroDB/jellyfin-plugin/main/manifest.json",
+		Priority: -12,
+	},
+
+	// ── Metadata: music ────────────────────────────────────────────────────────
+	// Lyrics: auto-download synchronized lyrics (LRC) from multiple sources
+	{
+		Name:     "Lyrics (自动下载歌词)",
+		URL:      "https://raw.githubusercontent.com/Felitendo/jellyfin-plugin-lyrics/main/manifest.json",
+		Priority: -13,
+	},
+	// AudioMuse AI: real-time sonic-analysis-based music queue recommendation
+	{
+		Name:     "AudioMuse AI (AI音乐推荐)",
+		URL:      "https://raw.githubusercontent.com/NeptuneHub/audiomuse-ai-plugin/master/manifest.json",
+		Priority: -14,
+	},
+
+	// ── Authentication ─────────────────────────────────────────────────────────
+	// Authelia: delegate auth to a self-hosted Authelia instance
+	{
+		Name:     "Authelia Authentication",
+		URL:      "https://raw.githubusercontent.com/nikarh/jellyfin-plugin-authelia/main/manifest.json",
+		Priority: -15,
+	},
+	// Jellyfin Security: TOTP 2FA, email OTP, trusted devices, TV pairing
+	{
+		Name:     "Jellyfin Security (2FA/TOTP)",
+		URL:      "https://raw.githubusercontent.com/ZL154/JellyfinSecurity/main/manifest.json",
+		Priority: -16,
+	},
+
+	// ── UI enhancements ────────────────────────────────────────────────────────
+	// InPlayerEpisodePreview: episode list panel inside the video player
+	{
+		Name:     "InPlayer Episode Preview",
+		URL:      "https://raw.githubusercontent.com/Namo2/InPlayerEpisodePreview/master/manifest.json",
+		Priority: -17,
+	},
+	// JMSFusion: smart media slider, hover trailers, recommendations, badges
+	{
+		Name:     "JMSFusion (MonWUI 高级UI)",
+		URL:      "https://raw.githubusercontent.com/G-grbz/Jellyfin-MonWUI-Plugin/main/manifest.json",
+		Priority: -18,
+	},
+	// Cinema Mode: play local trailers and pre-rolls before main feature
+	{
+		Name:     "Cinema Mode (影院模式)",
+		URL:      "https://raw.githubusercontent.com/CherryFloors/jellyfin-plugin-cinemamode/main/manifest.json",
+		Priority: -19,
+	},
+	// JavaScript Injector: inject custom JS into the Jellyfin web UI
+	{
+		Name:     "JavaScript Injector",
+		URL:      "https://raw.githubusercontent.com/n00bcodr/Jellyfin-JavaScript-Injector/main/manifest.json",
+		Priority: -20,
+	},
+	// JellyFlare: rotating announcement banners in the Jellyfin UI
+	{
+		Name:     "JellyFlare (公告横幅)",
+		URL:      "https://raw.githubusercontent.com/MorganKryze/JellyFlare/main/manifest.json",
+		Priority: -21,
+	},
+	// Seasonals: seasonal decorations/animations (Halloween, Christmas, etc.)
+	{
+		Name:     "Seasonals (季节主题动画)",
+		URL:      "https://raw.githubusercontent.com/CodeDevMLH/Jellyfin-Seasonals/main/manifest.json",
+		Priority: -22,
+	},
+	// Jellyfin-Roulette: pick a random unwatched item from a playlist
+	{
+		Name:     "Jellyfin Roulette (随机选片)",
+		URL:      "https://raw.githubusercontent.com/ztffn/Jellyfin-Roulette/main/manifest.json",
+		Priority: -23,
+	},
+	// Jellysleep: set a sleep timer that pauses or stops playback
+	{
+		Name:     "Jellysleep (睡眠定时器)",
+		URL:      "https://raw.githubusercontent.com/jon4hz/jellyfin-plugin-jellysleep/main/manifest.json",
+		Priority: -24,
+	},
+
+	// ── Library management ─────────────────────────────────────────────────────
+	// Language Tags: automatically tag media with detected audio/subtitle language
+	{
+		Name:     "Language Tags (语言自动标签)",
+		URL:      "https://raw.githubusercontent.com/TheXaman/jellyfin-plugin-languageTags/main/manifest.json",
+		Priority: -25,
+	},
+	// Jellyfin Ignore: exclude specific paths/folders from library scans
+	{
+		Name:     "Jellyfin Ignore (路径排除)",
+		URL:      "https://raw.githubusercontent.com/fdett/jellyfin-ignore/master/manifest.json",
+		Priority: -26,
+	},
+
+	// ── Server administration ──────────────────────────────────────────────────
+	// StreamLimiter: cap simultaneous transcoding/streaming sessions per user
+	{
+		Name:     "Stream Limiter (并发流限制)",
+		URL:      "https://raw.githubusercontent.com/JellyboxAD/Jellyfin.Plugin.StreamLimit/main/manifest.json",
+		Priority: -27,
+	},
+	// Streamyfin: companion plugin for the Streamyfin iOS/Android client
+	{
+		Name:     "Streamyfin Companion",
+		URL:      "https://raw.githubusercontent.com/streamyfin/jellyfin-plugin-streamyfin/main/manifest.json",
+		Priority: -28,
+	},
+	// RemoteUpload: remote download from URL + direct file management via browser
+	{
+		Name:     "RemoteUpload (远程下载)",
+		URL:      "https://raw.githubusercontent.com/GrandguyJS/media-upload-plugin/main/manifest.json",
+		Priority: -29,
+	},
+	// Meilisearch: replaces Jellyfin's built-in search with a Meilisearch backend
+	{
+		Name:     "Meilisearch (全文搜索)",
+		URL:      "https://raw.githubusercontent.com/arnesacnussem/jellyfin-plugin-meilisearch/master/manifest.json",
+		Priority: -30,
+	},
+	// AlexaSkill: expose Jellyfin controls via an Amazon Alexa skill
+	{
+		Name:     "Alexa Skill",
+		URL:      "https://raw.githubusercontent.com/infinityofspace/jellyfin-alexa-plugin/main/manifest.json",
+		Priority: -31,
+	},
+
+	// ── AI / upscaling ─────────────────────────────────────────────────────────
+	// AI Upscaler: real-time AI super-resolution for video streams
+	{
+		Name:     "AI Upscaler (AI超分辨率)",
+		URL:      "https://raw.githubusercontent.com/Kuschel-code/JellyfinUpscalerPlugin/main/manifest.json",
+		Priority: -32,
+	},
+
+	// ── Adult content ──────────────────────────────────────────────────────────
+	// PhoenixAdult: metadata scraper for 200+ adult sites
+	{
+		Name:     "PhoenixAdult (多站成人元数据)",
+		URL:      "https://raw.githubusercontent.com/DirtyRacer1337/Jellyfin.Plugin.PhoenixAdult/master/manifest.json",
+		Priority: -33,
+	},
+	// Stash: pull metadata from a self-hosted Stash instance
+	{
+		Name:     "Stash Metadata",
+		URL:      "https://raw.githubusercontent.com/DirtyRacer1337/Jellyfin.Plugin.Stash/main/manifest.json",
+		Priority: -34,
+	},
+
+	// ── Letterboxd (third implementation) ─────────────────────────────────────
+	{
+		Name:     "Letterboxd Sync (danielveigasilva)",
+		URL:      "https://raw.githubusercontent.com/danielveigasilva/jellyfin-plugin-letterboxd-sync/master/manifest.json",
+		Priority: -35,
+	},
 }
 
 // SeedDefaultRepos upserts built-in repos by URL (INSERT OR IGNORE), so new
