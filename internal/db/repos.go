@@ -398,6 +398,15 @@ var defaultRepos = []struct {
 		URL:      "https://raw.githubusercontent.com/voc0der/jellyfin-transcode-nag/main/manifest.json",
 		Priority: -9,
 	},
+
+	// ── Intro / credit skipping ────────────────────────────────────────────────
+	// Intro Skipper: audio fingerprinting to auto-detect and skip TV intros/credits
+	// Not in official stable; maintained by ConfusedPolarBear (community handoff pending)
+	{
+		Name:     "Intro Skipper (片头跳过)",
+		URL:      "https://raw.githubusercontent.com/ConfusedPolarBear/intro-skipper/master/manifest.json",
+		Priority: -11,
+	},
 }
 
 // SeedDefaultRepos upserts built-in repos by URL (INSERT OR IGNORE), so new
