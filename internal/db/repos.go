@@ -670,6 +670,22 @@ var defaultRepos = []struct {
 		URL:      "https://raw.githubusercontent.com/obxidion/Live-TV-Builder-Jellyfin-Plugin/main/manifest.json",
 		Priority: -48,
 	},
+
+	// ── IMDb ratings overlay ───────────────────────────────────────────────────
+	// TUIMDB: display IMDb ratings and metadata badges on media items
+	{
+		Name:     "TUIMDB (IMDb评分标签)",
+		URL:      "https://tuimdb.com/jellyfin/manifest.json",
+		Priority: -49,
+	},
+
+	// ── HTTP authentication ────────────────────────────────────────────────────
+	// HttpAuth: protect Jellyfin with HTTP Basic / header-based authentication
+	{
+		Name:     "HttpAuth",
+		URL:      "https://raw.githubusercontent.com/UlysseM/jellyfin-plugin-httpauth/gh-pages/repository.json",
+		Priority: -50,
+	},
 }
 
 // SeedDefaultRepos upserts built-in repos by URL (INSERT OR IGNORE), so new
