@@ -622,6 +622,54 @@ var defaultRepos = []struct {
 		URL:      "https://raw.githubusercontent.com/StergiosBinopoulos/jellyfin-plugin-bettermix/refs/heads/main/manifest-linux-x64.json",
 		Priority: -42,
 	},
+
+	// ── Video quality badges ────────────────────────────────────────────────────
+	// Quality Overlay: overlays HDR/DV/codec badges onto poster and backdrop images
+	{
+		Name:     "Quality Overlay (画质标签覆盖)",
+		URL:      "https://raw.githubusercontent.com/obxidion/Jellyfin-Quality-Overlay/main/manifest.json",
+		Priority: -43,
+	},
+
+	// ── Poster enhancement (NeurekaSoftware) ───────────────────────────────────
+	// Better Posters: auto-select best poster per item (different from TheAceOfficials version)
+	{
+		Name:     "Better Posters (Neureka)",
+		URL:      "https://code.neureka.dev/jellyfin/better-posters/raw/branch/master/manifest.json",
+		Priority: -44,
+	},
+
+	// ── Trailers ───────────────────────────────────────────────────────────────
+	// Trailers4Jellyfin: fetch and play trailers from multiple sources
+	{
+		Name:     "Trailers4Jellyfin",
+		URL:      "https://raw.githubusercontent.com/robadieNZ/Trailers4Jellyfin/main/manifest.json",
+		Priority: -45,
+	},
+
+	// ── Watch together / social ────────────────────────────────────────────────
+	// Binge Buddy: watch-party notifications and binge session companion
+	{
+		Name:     "Binge Buddy (一起追剧)",
+		URL:      "https://raw.githubusercontent.com/Cyprien-png/jellyfin-binge-buddy/master/manifest.json",
+		Priority: -46,
+	},
+
+	// ── Library management ─────────────────────────────────────────────────────
+	// Hide Empty Folders: remove empty TV show folders from library view
+	{
+		Name:     "Hide Empty Folders (隐藏空文件夹)",
+		URL:      "https://raw.githubusercontent.com/CapstonPeters/Jellyfin-Hide-Empty-Folders/main/manifest.json",
+		Priority: -47,
+	},
+
+	// ── Live TV ────────────────────────────────────────────────────────────────
+	// Live TV Builder: build and manage live TV playlists/channels from STRM sources
+	{
+		Name:     "Live TV Builder",
+		URL:      "https://raw.githubusercontent.com/obxidion/Live-TV-Builder-Jellyfin-Plugin/main/manifest.json",
+		Priority: -48,
+	},
 }
 
 // SeedDefaultRepos upserts built-in repos by URL (INSERT OR IGNORE), so new
