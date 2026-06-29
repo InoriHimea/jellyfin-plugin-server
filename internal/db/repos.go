@@ -566,6 +566,62 @@ var defaultRepos = []struct {
 		URL:      "https://raw.githubusercontent.com/danielveigasilva/jellyfin-plugin-letterboxd-sync/master/manifest.json",
 		Priority: -35,
 	},
+
+	// ── IPTV: Xtream (primary, GitHub Pages) ───────────────────────────────────
+	// Kevinjil: full Xtream-compatible API integration, highest-star Xtream plugin
+	{
+		Name:     "Jellyfin Xtream (Kevinjil)",
+		URL:      "https://kevinjil.github.io/Jellyfin.Xtream/repository.json",
+		Priority: -36,
+	},
+
+	// ── Smart / dynamic playlists ──────────────────────────────────────────────
+	// SmartLists: rule-based dynamic playlists and collections, auto-refreshed
+	{
+		Name:     "SmartLists (动态播放列表)",
+		URL:      "https://raw.githubusercontent.com/jyourstone/jellyfin-plugin-manifest/main/manifest.json",
+		Priority: -37,
+	},
+
+	// ── shemanaev plugin bundle (MyShows + Webhooks + Media Cleaner) ───────────
+	// MyShows: Russian TV tracker sync; Media Cleaner: auto-delete played media
+	{
+		Name:     "shemanaev Bundle (MyShows+MediaCleaner+Webhooks)",
+		URL:      "https://raw.githubusercontent.com/shemanaev/jellyfin-plugin-repo/refs/heads/master/manifest.json",
+		Priority: -38,
+	},
+
+	// ── Douban (Xzonn standalone) ──────────────────────────────────────────────
+	// Third Douban implementation, self-hosted manifest on xzonn.top
+	{
+		Name:     "Douban (Xzonn版)",
+		URL:      "https://xzonn.top/JellyfinPluginDouban/manifest.json",
+		Priority: -39,
+	},
+
+	// ── caryyu Gitee bundle (Open Douban + MaxSubtitle) ───────────────────────
+	// Open Douban: open-source Douban metadata; MaxSubtitle: Chinese subtitle download
+	{
+		Name:     "Open Douban + MaxSubtitle (caryyu)",
+		URL:      "https://gitee.com/caryyu/jellyfin-plugin-repo/raw/master/manifest-cn.json",
+		Priority: -40,
+	},
+
+	// ── Apple Music metadata ───────────────────────────────────────────────────
+	// lyarenei: Apple Music artist/album metadata provider (self-hosted manifest)
+	{
+		Name:     "Apple Music Metadata",
+		URL:      "https://repo.xkrivo.net/jellyfin/manifest.json",
+		Priority: -41,
+	},
+
+	// ── Better instant mix ─────────────────────────────────────────────────────
+	// BetterMix: improved Instant Mix algorithm; manifest is platform-specific (linux-x64)
+	{
+		Name:     "BetterMix (更好的即时混音)",
+		URL:      "https://raw.githubusercontent.com/StergiosBinopoulos/jellyfin-plugin-bettermix/refs/heads/main/manifest-linux-x64.json",
+		Priority: -42,
+	},
 }
 
 // SeedDefaultRepos upserts built-in repos by URL (INSERT OR IGNORE), so new
