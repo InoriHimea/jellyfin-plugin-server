@@ -21,7 +21,7 @@ func FetchAndStore(repoID, repoURL string) (Catalog, bool, error) {
 		`SELECT COALESCE(etag,''), COALESCE(last_fetched,'') FROM repos WHERE id=?`, repoID,
 	).Scan(&etag, &lastMod)
 
-	resp, err := proxyClient.Get(repoURL, etag, "")
+	resp, err := proxyClient.GetManifest(repoURL, etag, "")
 	if err != nil {
 		return nil, false, fmt.Errorf("fetch manifest %s: %w", repoURL, err)
 	}
@@ -249,6 +249,9 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 				seenVersions: make(map[string]bool),
 			}
 			order = append(order, guid)
+		} else if imageURL != "" && seen[guid].p.ImageURL == "" {
+			// Higher-priority repo had no image; use the first non-empty one we find.
+			seen[guid].p.ImageURL = imageURL
 		}
 
 		e := seen[guid]
