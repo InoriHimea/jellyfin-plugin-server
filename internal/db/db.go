@@ -17,12 +17,16 @@ func Open(path string) error {
 		return fmt.Errorf("create db dir: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=5000")
+	// WAL mode: concurrent readers don't block each other or writers.
+	// cache=shared lets multiple connections share the page cache.
+	db, err := sql.Open("sqlite", path+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=10000&cache=shared")
 	if err != nil {
 		return fmt.Errorf("open sqlite: %w", err)
 	}
 
-	db.SetMaxOpenConns(1)
+	// Allow up to 8 concurrent read connections; writes still serialise internally.
+	db.SetMaxOpenConns(8)
+	db.SetMaxIdleConns(4)
 	db.SetConnMaxLifetime(0)
 
 	if err := db.Ping(); err != nil {

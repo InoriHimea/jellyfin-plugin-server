@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/inorihimea/jellyfin-plugin-server/internal/db"
@@ -12,6 +13,25 @@ import (
 	proxyClient "github.com/inorihimea/jellyfin-plugin-server/internal/proxy"
 	"github.com/google/uuid"
 )
+
+// unifiedCache holds the last BuildUnifiedManifest result per baseURL.
+// Invalidated whenever FetchAndStore writes new data.
+var (
+	unifiedMu      sync.RWMutex
+	unifiedEntries = map[string]unifiedEntry{}
+	unifiedTTL     = 60 * time.Second
+)
+
+type unifiedEntry struct {
+	catalog   Catalog
+	expiresAt time.Time
+}
+
+func invalidateUnifiedCache() {
+	unifiedMu.Lock()
+	unifiedEntries = map[string]unifiedEntry{}
+	unifiedMu.Unlock()
+}
 
 // FetchAndStore fetches a manifest from the upstream URL, persists metadata to DB.
 // Returns (catalog, changed, error). changed=false means 304 Not Modified.
@@ -60,6 +80,9 @@ func FetchAndStore(repoID, repoURL string) (Catalog, bool, error) {
 
 	// Trigger background downloads for newly discovered versions.
 	go enqueuePending()
+
+	// Invalidate the in-memory unified manifest cache so the next request rebuilds it.
+	invalidateUnifiedCache()
 
 	return catalog, true, nil
 }
@@ -202,7 +225,15 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 
 // BuildUnifiedManifest aggregates all enabled repos into one deduplicated Catalog.
 // Per-GUID: metadata from the highest-priority repo; per (GUID, version): highest-priority copy wins.
+// Results are cached in memory for unifiedTTL (60s) to avoid repeated DB scans.
 func BuildUnifiedManifest(baseURL string) (Catalog, error) {
+	unifiedMu.RLock()
+	entry, ok := unifiedEntries[baseURL]
+	unifiedMu.RUnlock()
+	if ok && time.Now().Before(entry.expiresAt) {
+		return entry.catalog, nil
+	}
+
 	rows, err := db.DB.Query(
 		`SELECT p.guid, p.name, COALESCE(p.description,''), COALESCE(p.overview,''),
 		        COALESCE(p.owner,''), COALESCE(p.category,''), COALESCE(p.image_url,''),
@@ -277,6 +308,11 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 	for _, g := range order {
 		catalog = append(catalog, *seen[g].p)
 	}
+
+	unifiedMu.Lock()
+	unifiedEntries[baseURL] = unifiedEntry{catalog: catalog, expiresAt: time.Now().Add(unifiedTTL)}
+	unifiedMu.Unlock()
+
 	return catalog, nil
 }
 

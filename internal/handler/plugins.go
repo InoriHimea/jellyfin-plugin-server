@@ -62,11 +62,14 @@ func handleManifest(ctx *fasthttp.RequestCtx, repoID string) {
 
 	cfg := config.Get()
 	if manifest.IsTTLExpired(repo.LastFetched, cfg.Cache.ManifestTTLSeconds) {
-		logger.Info("manifest TTL expired, refreshing", map[string]any{"repo": repo.Name})
-		if _, _, err := manifest.FetchAndStore(repo.ID, repo.URL); err != nil {
-			logger.Warn("upstream fetch failed, serving stale", map[string]any{"err": err, "repo": repo.Name})
-		}
+		// Stale-while-revalidate: serve cached data immediately, refresh in background.
+		// This prevents upstream latency from blocking Jellyfin's package catalog request.
 		db.RecordCacheAccess(false)
+		go func() {
+			if _, _, err := manifest.FetchAndStore(repo.ID, repo.URL); err != nil {
+				logger.Warn("background manifest refresh failed", map[string]any{"err": err, "repo": repo.Name})
+			}
+		}()
 	} else {
 		db.RecordCacheAccess(true)
 	}

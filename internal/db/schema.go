@@ -61,8 +61,11 @@ CREATE TABLE IF NOT EXISTS cache_stats (
 	misses     INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_plugins_repo     ON plugins(repo_id);
-CREATE INDEX IF NOT EXISTS idx_versions_plugin  ON plugin_versions(plugin_id);
-CREATE INDEX IF NOT EXISTS idx_versions_status  ON plugin_versions(download_status);
-CREATE INDEX IF NOT EXISTS idx_logs_created     ON logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_plugins_repo          ON plugins(repo_id);
+CREATE INDEX IF NOT EXISTS idx_plugins_guid          ON plugins(guid);
+CREATE INDEX IF NOT EXISTS idx_versions_plugin       ON plugin_versions(plugin_id);
+CREATE INDEX IF NOT EXISTS idx_versions_status       ON plugin_versions(download_status);
+CREATE INDEX IF NOT EXISTS idx_versions_checksum     ON plugin_versions(checksum);
+CREATE INDEX IF NOT EXISTS idx_repos_enabled_prio    ON repos(enabled, priority DESC);
+CREATE INDEX IF NOT EXISTS idx_logs_created          ON logs(created_at);
 `
