@@ -3,8 +3,9 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/inorihimea/jellyfin-plugin-server/internal/config"
@@ -20,6 +21,7 @@ import (
 //
 //	GET /plugins/manifest/{repo-id}
 //	GET /plugins/packages/{checksum}/{filename}
+//	GET /plugins/images/{guid}
 func PluginRouter(ctx *fasthttp.RequestCtx) {
 	path := strings.TrimPrefix(string(ctx.Path()), "/plugins/")
 	parts := strings.SplitN(path, "/", 3)
@@ -29,9 +31,55 @@ func PluginRouter(ctx *fasthttp.RequestCtx) {
 		handleManifest(ctx, parts[1])
 	case len(parts) >= 3 && parts[0] == "packages":
 		handlePackage(ctx, parts[1], parts[2])
+	case len(parts) >= 2 && parts[0] == "images":
+		handleImage(ctx, parts[1])
 	default:
 		writeJSON(ctx, fasthttp.StatusNotFound, map[string]string{"error": "not found"})
 	}
+}
+
+// handleImage proxies and disk-caches plugin images so clients never fetch
+// them from upstream hosts directly (which may be slow or unreachable).
+func handleImage(ctx *fasthttp.RequestCtx, guid string) {
+	// GUIDs come from our own manifest — reject anything path-like.
+	if guid == "" || strings.ContainsAny(guid, "/\\.") {
+		writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": "bad guid"})
+		return
+	}
+
+	cachePath := filepath.Join(config.ImagesDir(), guid)
+	if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
+		serveImage(ctx, data)
+		return
+	}
+
+	var upstream string
+	err := db.DB.QueryRow(
+		`SELECT image_url FROM plugins WHERE guid=? AND image_url<>'' LIMIT 1`, guid,
+	).Scan(&upstream)
+	if err != nil || upstream == "" {
+		writeJSON(ctx, fasthttp.StatusNotFound, map[string]string{"error": "no image"})
+		return
+	}
+
+	resp, err := proxyClient.GetManifest(upstream, "", "")
+	if err != nil || resp.StatusCode != http.StatusOK || len(resp.Body) == 0 {
+		logger.Warn("image fetch failed", map[string]any{"err": err, "url": upstream})
+		writeJSON(ctx, fasthttp.StatusBadGateway, map[string]string{"error": "image fetch failed"})
+		return
+	}
+
+	if err := os.MkdirAll(config.ImagesDir(), 0755); err == nil {
+		_ = os.WriteFile(cachePath, resp.Body, 0644)
+	}
+	serveImage(ctx, resp.Body)
+}
+
+func serveImage(ctx *fasthttp.RequestCtx, data []byte) {
+	ctx.SetContentType(http.DetectContentType(data))
+	ctx.Response.Header.Set("Cache-Control", "public, max-age=604800")
+	ctx.SetStatusCode(fasthttp.StatusOK)
+	ctx.SetBody(data)
 }
 
 // handleUnifiedManifest serves GET /manifest — all enabled repos merged and deduplicated by GUID.
@@ -89,9 +137,10 @@ func handleManifest(ctx *fasthttp.RequestCtx, repoID string) {
 }
 
 // handlePackage serves plugin zip files.
-// If the file is cached locally it is served from disk.
-// Otherwise it is streamed from the upstream URL through our configured proxy,
-// and a background download is triggered so subsequent requests are served locally.
+// If the file is cached locally it is served from disk. Otherwise it is
+// downloaded synchronously (through the configured proxy, checksum-verified,
+// deduplicated via singleflight) and then served — never a raw pass-through
+// stream, so Jellyfin can't receive a truncated or corrupt body.
 func handlePackage(ctx *fasthttp.RequestCtx, checksum, filename string) {
 	var versionID, localPath, sourceURL, dlStatus string
 	err := db.DB.QueryRow(
@@ -106,43 +155,35 @@ func handlePackage(ctx *fasthttp.RequestCtx, checksum, filename string) {
 
 	// Fast path: already cached on disk.
 	if dlStatus == "done" && localPath != "" {
-		fasthttp.ServeFile(ctx, localPath)
-		return
-	}
-
-	// Slow path: stream from upstream via our configured proxy.
-	// Simultaneously enqueue a background download so it lands on disk for next time.
-	downloader.Enqueue(versionID, checksum, sourceURL, filename)
-
-	req, err := http.NewRequest(http.MethodGet, sourceURL, nil)
-	if err != nil {
-		logger.Error("build upstream request failed", map[string]any{"err": err, "url": sourceURL})
-		ctx.Redirect(sourceURL, fasthttp.StatusFound)
-		return
-	}
-	req.Header.Set("User-Agent", "jellyfin-plugin-server/1.0")
-
-	// Use stream client (no body-read timeout) so large files don't get cut off.
-	resp, err := proxyClient.GetStreamClient().Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		if resp != nil {
-			resp.Body.Close()
+		if _, statErr := os.Stat(localPath); statErr == nil {
+			serveZip(ctx, localPath, filename)
+			return
 		}
-		logger.Warn("upstream stream failed, redirecting", map[string]any{"err": err, "url": sourceURL})
-		ctx.Redirect(sourceURL, fasthttp.StatusFound)
+		// DB says done but the file is gone — fall through and re-download.
+	}
+
+	// Cache miss: download to disk now (checksum-verified), then serve the file.
+	// Concurrent requests for the same checksum share one download via singleflight.
+	if err := downloader.EnqueueSync(versionID, checksum, sourceURL, filename); err != nil {
+		logger.Warn("on-demand download failed", map[string]any{"err": err, "url": sourceURL})
+		writeJSON(ctx, fasthttp.StatusBadGateway, map[string]string{"error": "upstream download failed"})
 		return
 	}
-	defer resp.Body.Close()
 
-	ctx.SetContentType("application/zip")
-	if cl := resp.Header.Get("Content-Length"); cl != "" {
-		ctx.Response.Header.Set("Content-Length", cl)
+	var freshPath string
+	if err := db.DB.QueryRow(
+		`SELECT COALESCE(local_path,'') FROM plugin_versions WHERE id=?`, versionID,
+	).Scan(&freshPath); err != nil || freshPath == "" {
+		writeJSON(ctx, fasthttp.StatusBadGateway, map[string]string{"error": "download completed but file missing"})
+		return
 	}
+	serveZip(ctx, freshPath, filename)
+}
+
+func serveZip(ctx *fasthttp.RequestCtx, path, filename string) {
 	ctx.Response.Header.Set("Content-Disposition", `attachment; filename="`+filename+`"`)
-
-	if _, err := io.Copy(ctx.Response.BodyWriter(), resp.Body); err != nil {
-		logger.Warn("stream copy interrupted", map[string]any{"err": err})
-	}
+	ctx.SetContentType("application/zip")
+	fasthttp.ServeFile(ctx, path)
 }
 
 func baseURLFromCtx(ctx *fasthttp.RequestCtx) string {

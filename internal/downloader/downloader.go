@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/inorihimea/jellyfin-plugin-server/internal/config"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/db"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/logger"
+	proxyClient "github.com/inorihimea/jellyfin-plugin-server/internal/proxy"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/storage"
 	"golang.org/x/sync/singleflight"
 )
@@ -99,7 +101,10 @@ func download(versionID, checksum, sourceURL, filename string) error {
 		os.Remove(tmpPath) // no-op if already renamed
 	}()
 
-	resp, err := http.Get(sourceURL)
+	// Fetch through the configured proxy (stream client: no body-read timeout).
+	// Plain http.Get would bypass the proxy and fail on networks where GitHub
+	// is unreachable directly.
+	resp, err := fetchWithRetry(sourceURL, 3)
 	if err != nil {
 		markFailed(versionID, fmt.Sprintf("http get: %v", err))
 		return err
@@ -147,6 +152,35 @@ func download(versionID, checksum, sourceURL, filename string) error {
 	return nil
 }
 
+// fetchWithRetry GETs a URL via the proxy-aware stream client, retrying
+// transient failures with a short backoff.
+func fetchWithRetry(rawURL string, attempts int) (*http.Response, error) {
+	var lastErr error
+	for i := 0; i < attempts; i++ {
+		if i > 0 {
+			time.Sleep(time.Duration(i) * 2 * time.Second)
+		}
+		req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", "jellyfin-plugin-server/1.0")
+		resp, err := proxyClient.GetStreamClient().Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		// Retry on 5xx / 429; other statuses are returned to the caller.
+		if resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("upstream returned %d", resp.StatusCode)
+			continue
+		}
+		return resp, nil
+	}
+	return nil, lastErr
+}
+
 func markFailed(versionID, reason string) {
 	db.DB.Exec(
 		`UPDATE plugin_versions SET download_status='failed' WHERE id=?`, versionID,
@@ -154,10 +188,12 @@ func markFailed(versionID, reason string) {
 	logger.Warn("download failed", map[string]any{"version_id": versionID, "reason": reason})
 }
 
-// EnqueueAllPending enqueues all versions currently in 'pending' state.
+// EnqueueAllPending enqueues all versions in 'pending' state, plus previously
+// 'failed' ones so transient network errors are retried on every refresh cycle.
 func EnqueueAllPending() {
 	rows, err := db.DB.Query(
-		`SELECT id, checksum, source_url FROM plugin_versions WHERE download_status='pending'`,
+		`SELECT id, checksum, source_url FROM plugin_versions
+		 WHERE download_status IN ('pending', 'failed')`,
 	)
 	if err != nil {
 		return

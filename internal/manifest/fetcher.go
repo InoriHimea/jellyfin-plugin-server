@@ -198,7 +198,7 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 			pluginMap[guid] = &Plugin{
 				GUID: guid, Name: name, Description: desc,
 				Overview: overview, Owner: owner,
-				Category: normalizeCategory(cat), ImageURL: imageURL,
+				Category: normalizeCategory(cat), ImageURL: imageProxyURL(baseURL, guid, imageURL),
 			}
 			order = append(order, guid)
 		}
@@ -275,14 +275,14 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 				p: &Plugin{
 					GUID: guid, Name: name, Description: desc,
 					Overview: overview, Owner: owner,
-					Category: normalizeCategory(cat), ImageURL: imageURL,
+					Category: normalizeCategory(cat), ImageURL: imageProxyURL(baseURL, guid, imageURL),
 				},
 				seenVersions: make(map[string]bool),
 			}
 			order = append(order, guid)
 		} else if imageURL != "" && seen[guid].p.ImageURL == "" {
 			// Higher-priority repo had no image; use the first non-empty one we find.
-			seen[guid].p.ImageURL = imageURL
+			seen[guid].p.ImageURL = imageProxyURL(baseURL, guid, imageURL)
 		}
 
 		e := seen[guid]
@@ -345,6 +345,15 @@ func normalizeCategory(cat string) string {
 	default:
 		return "General"
 	}
+}
+
+// imageProxyURL rewrites a plugin image to our /plugins/images/{guid} endpoint
+// so clients fetch it from us (proxied + disk-cached) instead of upstream hosts.
+func imageProxyURL(base, guid, upstream string) string {
+	if upstream == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/plugins/images/%s", strings.TrimRight(base, "/"), guid)
 }
 
 func localURL(base, checksum, localPath, srcURL string) string {

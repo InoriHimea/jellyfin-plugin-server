@@ -176,6 +176,13 @@ func PackagesDir() string {
 	return filepath.Join(current.Storage.DataDir, "packages")
 }
 
+// ImagesDir is the on-disk cache for proxied plugin images.
+func ImagesDir() string {
+	mu.RLock()
+	defer mu.RUnlock()
+	return filepath.Join(current.Storage.DataDir, "images")
+}
+
 func DBPath() string {
 	mu.RLock()
 	defer mu.RUnlock()
