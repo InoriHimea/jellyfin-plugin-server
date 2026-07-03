@@ -116,8 +116,18 @@ func download(versionID, checksum, sourceURL, filename string) error {
 		return fmt.Errorf("upstream returned %d", resp.StatusCode)
 	}
 
+	entry := &progressEntry{
+		VersionID: versionID,
+		Checksum:  checksum,
+		Filename:  filename,
+		Total:     resp.ContentLength,
+		StartedAt: time.Now(),
+	}
+	progress.Store(versionID, entry)
+	defer progress.Delete(versionID)
+
 	h := md5.New()
-	w := io.MultiWriter(tmpFile, h)
+	w := io.MultiWriter(tmpFile, h, progressWriter{entry})
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		markFailed(versionID, fmt.Sprintf("copy: %v", err))
 		return err
@@ -144,7 +154,7 @@ func download(versionID, checksum, sourceURL, filename string) error {
 	}
 
 	db.DB.Exec(
-		`UPDATE plugin_versions SET download_status='done', local_path=?, downloaded_at=? WHERE id=?`,
+		`UPDATE plugin_versions SET download_status='done', local_path=?, downloaded_at=?, fail_reason='' WHERE id=?`,
 		destPath, db.Now(), versionID,
 	)
 	logger.Info("package downloaded", map[string]any{"file": filename, "checksum": checksum})
@@ -182,8 +192,11 @@ func fetchWithRetry(rawURL string, attempts int) (*http.Response, error) {
 }
 
 func markFailed(versionID, reason string) {
+	if len(reason) > 300 {
+		reason = reason[:300]
+	}
 	db.DB.Exec(
-		`UPDATE plugin_versions SET download_status='failed' WHERE id=?`, versionID,
+		`UPDATE plugin_versions SET download_status='failed', fail_reason=? WHERE id=?`, reason, versionID,
 	)
 	logger.Warn("download failed", map[string]any{"version_id": versionID, "reason": reason})
 }

@@ -19,6 +19,7 @@ export interface Package {
   local_path?: string
   source_url: string
   downloaded_at?: string
+  fail_reason?: string
 }
 
 export interface LogEntry {
@@ -56,6 +57,24 @@ export interface CleanResult {
   orphan_removed: string[]
   bytes_freed: number
   dry_run: boolean
+}
+
+export interface ActiveDownload {
+  version_id: string
+  checksum: string
+  filename: string
+  done_bytes: number
+  total_bytes: number
+  percent: number
+  speed_bps: number
+  elapsed_sec: number
+  name: string
+  version: string
+}
+
+export interface DownloadsStatus {
+  summary: { pending: number; downloading: number; done: number; failed: number; total: number }
+  active: ActiveDownload[]
 }
 
 export interface Config {
@@ -125,6 +144,11 @@ export const api = {
     refresh: (id: string) => req('/api/repos/' + id + '/refresh', { method: 'POST' }),
     refreshAll: () => req<Record<string, string>>('/api/repos/refresh-all', { method: 'POST' }),
     test: (id: string) => req<{ reachable: boolean; status_code?: number; error?: string }>('/api/repos/' + id + '/test', { method: 'POST' }),
+  },
+
+  downloads: {
+    status: () => req<DownloadsStatus>('/api/downloads/status'),
+    retryFailed: () => req<{ retrying: number }>('/api/downloads/retry-failed', { method: 'POST' }),
   },
 
   packages: {

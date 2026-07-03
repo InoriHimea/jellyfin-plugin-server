@@ -51,6 +51,11 @@ func APIRouter(ctx *fasthttp.RequestCtx) {
 	case path == "/logs" && method == "GET":
 		apiLogs(ctx)
 
+	case path == "/downloads/status" && method == "GET":
+		apiDownloadsStatus(ctx)
+	case path == "/downloads/retry-failed" && method == "POST":
+		apiRetryFailed(ctx)
+
 	case path == "/packages" && method == "GET":
 		apiListPackages(ctx)
 	case path == "/packages/cleanup" && method == "POST":
@@ -122,7 +127,8 @@ func apiListPackages(ctx *fasthttp.RequestCtx) {
 	search := string(ctx.QueryArgs().Peek("q"))
 	query := `
 		SELECT v.id, p.name, p.owner, v.version, v.checksum, v.download_status,
-		       COALESCE(v.local_path,''), v.source_url, COALESCE(v.downloaded_at,'')
+		       COALESCE(v.local_path,''), v.source_url, COALESCE(v.downloaded_at,''),
+		       COALESCE(v.fail_reason,'')
 		FROM plugin_versions v JOIN plugins p ON p.id = v.plugin_id`
 	args := []any{}
 	if search != "" {
@@ -149,16 +155,66 @@ func apiListPackages(ctx *fasthttp.RequestCtx) {
 		LocalPath    string `json:"local_path,omitempty"`
 		SourceURL    string `json:"source_url"`
 		DownloadedAt string `json:"downloaded_at,omitempty"`
+		FailReason   string `json:"fail_reason,omitempty"`
 	}
 	var list []pkgEntry
 	for rows.Next() {
 		var e pkgEntry
-		if err := rows.Scan(&e.ID, &e.Name, &e.Owner, &e.Version, &e.Checksum, &e.Status, &e.LocalPath, &e.SourceURL, &e.DownloadedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.Name, &e.Owner, &e.Version, &e.Checksum, &e.Status, &e.LocalPath, &e.SourceURL, &e.DownloadedAt, &e.FailReason); err != nil {
 			continue
 		}
 		list = append(list, e)
 	}
 	writeJSON(ctx, fasthttp.StatusOK, list)
+}
+
+// apiDownloadsStatus returns aggregate download counters plus per-file
+// progress snapshots for everything currently in flight.
+func apiDownloadsStatus(ctx *fasthttp.RequestCtx) {
+	summary := map[string]int{"pending": 0, "downloading": 0, "done": 0, "failed": 0, "total": 0}
+	rows, err := db.DB.Query(
+		`SELECT download_status, COUNT(*) FROM plugin_versions GROUP BY download_status`,
+	)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var status string
+			var n int
+			if rows.Scan(&status, &n) == nil {
+				summary[status] = n
+				summary["total"] += n
+			}
+		}
+	}
+
+	type dlItem struct {
+		downloader.ActiveDownload
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	}
+	active := downloader.ActiveDownloads()
+	items := make([]dlItem, 0, len(active))
+	for _, a := range active {
+		item := dlItem{ActiveDownload: a}
+		db.DB.QueryRow(
+			`SELECT p.name, v.version FROM plugin_versions v
+			 JOIN plugins p ON p.id = v.plugin_id WHERE v.id=?`, a.VersionID,
+		).Scan(&item.Name, &item.Version)
+		items = append(items, item)
+	}
+
+	writeJSON(ctx, fasthttp.StatusOK, map[string]any{
+		"summary": summary,
+		"active":  items,
+	})
+}
+
+// apiRetryFailed re-enqueues every failed download.
+func apiRetryFailed(ctx *fasthttp.RequestCtx) {
+	var n int
+	db.DB.QueryRow(`SELECT COUNT(*) FROM plugin_versions WHERE download_status='failed'`).Scan(&n)
+	go downloader.EnqueueAllPending()
+	writeJSON(ctx, fasthttp.StatusOK, map[string]any{"retrying": n})
 }
 
 func apiDeletePackage(ctx *fasthttp.RequestCtx, checksum string) {

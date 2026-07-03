@@ -39,6 +39,7 @@ func Open(path string) error {
 
 	// Migrations for existing databases — errors are ignored when column already exists.
 	db.Exec(`ALTER TABLE plugins ADD COLUMN image_url TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE plugin_versions ADD COLUMN fail_reason TEXT NOT NULL DEFAULT ''`)
 
 	DB = db
 	return nil

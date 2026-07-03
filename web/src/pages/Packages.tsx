@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { api, type Package, type CleanResult } from '@/lib/api'
+import { api, type Package, type CleanResult, type DownloadsStatus } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -7,7 +7,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { Search, Trash2, RefreshCw, Sparkles, ChevronDown, ChevronRight, Package as PkgIcon } from 'lucide-react'
+import {
+  Search, Trash2, RefreshCw, Sparkles, ChevronDown, ChevronRight,
+  Package as PkgIcon, Download, CheckCircle2, XCircle, Clock, RotateCcw,
+} from 'lucide-react'
 
 const PAGE = 20
 
@@ -19,8 +22,15 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 function fmtBytes(b: number) {
+  if (b < 0) return '未知'
   if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB'
   return (b / 1024 / 1024).toFixed(1) + ' MB'
+}
+
+function fmtSpeed(bps: number) {
+  if (bps <= 0) return '—'
+  if (bps < 1024 * 1024) return (bps / 1024).toFixed(0) + ' KB/s'
+  return (bps / 1024 / 1024).toFixed(1) + ' MB/s'
 }
 
 function fmtDate(s?: string) {
@@ -58,6 +68,10 @@ export function Packages() {
   const [page, setPage]           = useState(1)
   const sentinelRef               = useRef<HTMLDivElement>(null)
 
+  const [dl, setDl]               = useState<DownloadsStatus | null>(null)
+  const prevDoneRef               = useRef(-1)
+  const [retrying, setRetrying]   = useState(false)
+
   const [cleanDlgOpen, setCleanDlgOpen] = useState(false)
   const [preview, setPreview]           = useState<CleanResult | null>(null)
   const [previewing, setPreviewing]     = useState(false)
@@ -69,6 +83,25 @@ export function Packages() {
   }, [q])
 
   useEffect(() => { load() }, [load])
+
+  // Poll download status; refresh the package list whenever a download lands.
+  useEffect(() => {
+    let stop = false
+    const tick = async () => {
+      try {
+        const s = await api.downloads.status()
+        if (stop) return
+        setDl(s)
+        if (prevDoneRef.current >= 0 && s.summary.done !== prevDoneRef.current) {
+          api.packages.list(q).then(p => { if (!stop) setPackages(p ?? []) })
+        }
+        prevDoneRef.current = s.summary.done
+      } catch { /* server unreachable, keep last state */ }
+    }
+    tick()
+    const iv = setInterval(tick, 2500)
+    return () => { stop = true; clearInterval(iv) }
+  }, [q])
 
   const groups = groupPackages(packages)
   const visible = groups.slice(0, page * PAGE)
@@ -101,6 +134,18 @@ export function Packages() {
       load()
     } catch (e: unknown) {
       toast.error((e as Error).message)
+    }
+  }
+
+  const retryFailed = async () => {
+    setRetrying(true)
+    try {
+      const r = await api.downloads.retryFailed()
+      toast.success(`已重新排队 ${r.retrying} 个失败的下载`)
+    } catch (e: unknown) {
+      toast.error((e as Error).message)
+    } finally {
+      setRetrying(false)
     }
   }
 
@@ -137,6 +182,10 @@ export function Packages() {
 
   const initial = (name: string) => name.slice(0, 2).toUpperCase()
 
+  const sum = dl?.summary
+  const cachePct = sum && sum.total > 0 ? Math.round((sum.done / sum.total) * 100) : 0
+  const activeById = new Map((dl?.active ?? []).map(a => [a.version_id, a]))
+
   return (
     <div className="p-6 space-y-4">
       {/* Header */}
@@ -148,6 +197,12 @@ export function Packages() {
           </p>
         </div>
         <div className="flex gap-2">
+          {sum && sum.failed > 0 && (
+            <Button variant="outline" size="sm" onClick={retryFailed} disabled={retrying}>
+              <RotateCcw className={`h-4 w-4 mr-1 ${retrying ? 'animate-spin' : ''}`} />
+              重试失败 ({sum.failed})
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={openCleanDialog}>
             <Sparkles className="h-4 w-4 mr-1" />
             立即清理
@@ -158,6 +213,80 @@ export function Packages() {
           </Button>
         </div>
       </div>
+
+      {/* Cache summary strip */}
+      {sum && sum.total > 0 && (
+        <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-5 text-sm flex-wrap">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                <span className="font-medium tabular-nums">{sum.done}</span>
+                <span className="text-muted-foreground">已缓存</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Download className={`h-4 w-4 text-blue-500 ${sum.downloading > 0 ? 'animate-pulse' : ''}`} />
+                <span className="font-medium tabular-nums">{sum.downloading}</span>
+                <span className="text-muted-foreground">下载中</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Clock className="h-4 w-4 text-slate-400" />
+                <span className="font-medium tabular-nums">{sum.pending}</span>
+                <span className="text-muted-foreground">排队中</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <XCircle className="h-4 w-4 text-red-500" />
+                <span className="font-medium tabular-nums">{sum.failed}</span>
+                <span className="text-muted-foreground">失败</span>
+              </span>
+            </div>
+            <span className="text-sm font-medium tabular-nums">{cachePct}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all duration-700"
+              style={{ width: `${cachePct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Active downloads panel */}
+      {dl && dl.active.length > 0 && (
+        <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4 space-y-3">
+          <p className="text-sm font-medium flex items-center gap-2">
+            <Download className="h-4 w-4 text-blue-500 animate-pulse" />
+            正在下载 {dl.active.length} 个文件
+          </p>
+          <div className="space-y-2.5">
+            {dl.active.map(a => (
+              <div key={a.version_id} className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium truncate mr-3">
+                    {a.name || a.filename} {a.version && <span className="text-muted-foreground font-mono">v{a.version}</span>}
+                  </span>
+                  <span className="text-muted-foreground tabular-nums shrink-0">
+                    {a.total_bytes > 0
+                      ? `${fmtBytes(a.done_bytes)} / ${fmtBytes(a.total_bytes)} · ${fmtSpeed(a.speed_bps)} · ${Math.round(a.percent)}%`
+                      : `${fmtBytes(a.done_bytes)} · ${fmtSpeed(a.speed_bps)}`
+                    }
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                  {a.total_bytes > 0 ? (
+                    <div
+                      className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                      style={{ width: `${a.percent}%` }}
+                    />
+                  ) : (
+                    <div className="h-full w-1/3 rounded-full bg-blue-500/60 animate-pulse" />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative max-w-sm">
@@ -193,7 +322,6 @@ export function Packages() {
                   className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors select-none"
                   onClick={() => toggle(group.name)}
                 >
-                  {/* Chevron */}
                   <div className="text-muted-foreground shrink-0">
                     {isOpen
                       ? <ChevronDown className="h-4 w-4" />
@@ -201,12 +329,10 @@ export function Packages() {
                     }
                   </div>
 
-                  {/* Icon */}
                   <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary/20 to-violet-500/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0 border border-primary/10">
                     {initial(group.name)}
                   </div>
 
-                  {/* Name + owner */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium leading-none">{group.name}</p>
                     {group.owner && (
@@ -214,14 +340,12 @@ export function Packages() {
                     )}
                   </div>
 
-                  {/* Version count */}
                   {group.versions.length > 1 && (
                     <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
                       {group.versions.length} 个版本
                     </span>
                   )}
 
-                  {/* Latest version + status */}
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs font-mono text-muted-foreground">
                       v{group.latestVersion}
@@ -245,30 +369,57 @@ export function Packages() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border/20">
-                        {group.versions.map(p => (
-                          <tr key={p.id} className="hover:bg-muted/20 transition-colors">
-                            <td className="px-4 py-2 font-mono text-xs pl-[3.25rem]">v{p.version}</td>
-                            <td className="px-4 py-2">
-                              <Badge variant={STATUS_COLOR[p.status] ?? 'outline'} className="text-[10px] h-5">
-                                {STATUS_LABEL[p.status] ?? p.status}
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-2 text-xs text-muted-foreground tabular-nums">
-                              {fmtDate(p.downloaded_at)}
-                            </td>
-                            <td className="px-4 py-2 text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive/60 hover:text-destructive disabled:opacity-25"
-                                disabled={p.status !== 'done'}
-                                onClick={() => del(p)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
+                        {group.versions.map(p => {
+                          const act = activeById.get(p.id)
+                          return (
+                            <tr key={p.id} className="hover:bg-muted/20 transition-colors">
+                              <td className="px-4 py-2 font-mono text-xs pl-[3.25rem]">v{p.version}</td>
+                              <td className="px-4 py-2">
+                                {act ? (
+                                  <div className="flex items-center gap-2 min-w-[140px]">
+                                    <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                                      <div
+                                        className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                                        style={{ width: `${act.total_bytes > 0 ? act.percent : 30}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                                      {act.total_bytes > 0 ? `${Math.round(act.percent)}%` : '…'}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col gap-0.5">
+                                    <Badge variant={STATUS_COLOR[p.status] ?? 'outline'} className="text-[10px] h-5 w-fit">
+                                      {STATUS_LABEL[p.status] ?? p.status}
+                                    </Badge>
+                                    {p.status === 'failed' && p.fail_reason && (
+                                      <span
+                                        className="text-[10px] text-red-500/80 max-w-[260px] truncate"
+                                        title={p.fail_reason}
+                                      >
+                                        {p.fail_reason}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-xs text-muted-foreground tabular-nums">
+                                {fmtDate(p.downloaded_at)}
+                              </td>
+                              <td className="px-4 py-2 text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive/60 hover:text-destructive disabled:opacity-25"
+                                  disabled={p.status !== 'done'}
+                                  onClick={() => del(p)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
