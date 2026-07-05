@@ -211,8 +211,17 @@ func apiDownloadsStatus(ctx *fasthttp.RequestCtx) {
 
 // apiRetryFailed re-enqueues every failed download.
 func apiRetryFailed(ctx *fasthttp.RequestCtx) {
-	var n int
-	db.DB.QueryRow(`SELECT COUNT(*) FROM plugin_versions WHERE download_status='failed'`).Scan(&n)
+	// Flip failed → pending immediately so the UI shows a visible state
+	// change right away, instead of waiting for a semaphore slot to free up
+	// before anything appears to happen.
+	res, err := db.DB.Exec(
+		`UPDATE plugin_versions SET download_status='pending', fail_reason='' WHERE download_status='failed'`,
+	)
+	if err != nil {
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	n, _ := res.RowsAffected()
 	go downloader.EnqueueAllPending()
 	writeJSON(ctx, fasthttp.StatusOK, map[string]any{"retrying": n})
 }

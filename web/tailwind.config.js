@@ -46,11 +46,24 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        sakura: "hsl(var(--sakura))",
+        lavender: "hsl(var(--lavender))",
+        mint: "hsl(var(--mint))",
+      },
+      fontFamily: {
+        sans: ['"M PLUS Rounded 1c"', "ui-sans-serif", "system-ui", "sans-serif"],
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 4px)",
+        sm: "calc(var(--radius) - 8px)",
+        "2xl": "calc(var(--radius) + 8px)",
+      },
+      boxShadow: {
+        "glow-sakura": "0 8px 24px -8px hsl(var(--sakura) / 0.45)",
+        "glow-lavender": "0 8px 24px -8px hsl(var(--lavender) / 0.45)",
+        "glow-mint": "0 8px 24px -8px hsl(var(--mint) / 0.4)",
+        soft: "0 2px 16px -4px hsl(var(--sakura) / 0.12)",
       },
       keyframes: {
         "accordion-down": {
@@ -61,10 +74,20 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        float: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-10px)" },
+        },
+        sparkle: {
+          "0%, 100%": { opacity: "0.5", transform: "scale(0.85)" },
+          "50%": { opacity: "1", transform: "scale(1.1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        float: "float 6s ease-in-out infinite",
+        sparkle: "sparkle 2.4s ease-in-out infinite",
       },
     },
   },

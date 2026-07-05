@@ -5,31 +5,31 @@ import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import {
   Download, Search, RefreshCw, CheckCircle2, Loader2, Clock,
-  AlertCircle, Package, ChevronDown, ChevronRight, Layers,
+  AlertCircle, Package, ChevronDown, ChevronRight, Layers, Sparkles,
 } from 'lucide-react'
 
 const PAGE = 20
 
 const CAT_COLOR: Record<string, string> = {
-  MoviesAndShows: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  Subtitles:      'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-  LiveTV:         'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-  Administration: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
-  Music:          'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300',
+  MoviesAndShows: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+  Subtitles:      'bg-mint/20 text-emerald-700 dark:text-emerald-300',
+  LiveTV:         'bg-destructive/15 text-destructive dark:text-red-300',
+  Administration: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  Music:          'bg-sakura/15 text-pink-700 dark:text-pink-300',
   Books:          'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-  Anime:          'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
-  General:        'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
-  Metadata:       'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+  Anime:          'bg-lavender/20 text-violet-700 dark:text-violet-300',
+  General:        'bg-muted text-muted-foreground',
+  Metadata:       'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
 }
 const catColor = (cat: string) =>
-  CAT_COLOR[cat] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+  CAT_COLOR[cat] ?? 'bg-muted text-muted-foreground'
 
 const STATUS_CFG = {
-  done:        { label: '已下载', icon: CheckCircle2, cls: 'text-emerald-500 dark:text-emerald-400' },
-  downloading: { label: '下载中', icon: Loader2,      cls: 'text-blue-500 animate-spin' },
-  pending:     { label: '待下载', icon: Clock,         cls: 'text-slate-400' },
-  failed:      { label: '失败',   icon: AlertCircle,   cls: 'text-red-500' },
-  '':          { label: '—',      icon: Clock,         cls: 'text-slate-300' },
+  done:        { label: '已下载', icon: CheckCircle2, cls: 'text-mint' },
+  downloading: { label: '下载中', icon: Loader2,      cls: 'text-lavender animate-spin' },
+  pending:     { label: '待下载', icon: Clock,         cls: 'text-muted-foreground' },
+  failed:      { label: '失败',   icon: AlertCircle,   cls: 'text-destructive' },
+  '':          { label: '—',      icon: Clock,         cls: 'text-muted-foreground/50' },
 } as const
 
 type StatusKey = keyof typeof STATUS_CFG
@@ -108,7 +108,9 @@ export function Catalog() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">插件目录</h1>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            插件目录 <Sparkles className="h-5 w-5 text-sakura sparkle-pulse" />
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {loading ? '加载中…' : `共 ${entries.length} 个插件，来自所有已启用仓库`}
           </p>
@@ -160,7 +162,7 @@ export function Catalog() {
           <p className="text-sm">没有匹配的插件</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-border/60 overflow-hidden shadow-sm divide-y divide-border/50">
+        <div className="rounded-2xl border border-border/60 overflow-hidden shadow-soft divide-y divide-border/50">
           {visible.map(e => {
             const cat     = e.category || 'General'
             const isOpen  = expanded.has(e.guid)
@@ -184,7 +186,7 @@ export function Catalog() {
                   </div>
 
                   {/* Icon */}
-                  <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary/20 to-violet-500/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0 border border-primary/10">
+                  <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-sakura/20 to-lavender/20 flex items-center justify-center text-[10px] font-bold text-sakura shrink-0 border border-sakura/10">
                     {initial(e.name)}
                   </div>
 

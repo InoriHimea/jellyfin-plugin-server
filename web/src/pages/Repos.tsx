@@ -13,7 +13,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { toast } from 'sonner'
-import { Plus, RefreshCw, Trash2, Wifi, WifiOff, Pencil } from 'lucide-react'
+import { Plus, RefreshCw, Trash2, Wifi, WifiOff, Pencil, Sparkles } from 'lucide-react'
 
 const emptyForm = { name: '', url: '', priority: 50, enabled: true }
 
@@ -106,7 +106,9 @@ export function Repos() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">仓库管理</h1>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          仓库管理 <Sparkles className="h-5 w-5 text-sakura sparkle-pulse" />
+        </h1>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={refreshAll} disabled={refreshing === 'all'}>
             <RefreshCw className={`h-4 w-4 mr-1 ${refreshing === 'all' ? 'animate-spin' : ''}`} />

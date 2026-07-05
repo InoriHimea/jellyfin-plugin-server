@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Sparkles } from 'lucide-react'
 import { api, type Config } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,7 +49,9 @@ export function Settings() {
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">
-      <h1 className="text-2xl font-bold">系统设置</h1>
+      <h1 className="text-2xl font-bold flex items-center gap-2">
+        系统设置 <Sparkles className="h-5 w-5 text-sakura sparkle-pulse" />
+      </h1>
 
       {/* 服务器 */}
       <Card>

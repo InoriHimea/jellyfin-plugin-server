@@ -69,7 +69,7 @@ export function Packages() {
   const sentinelRef               = useRef<HTMLDivElement>(null)
 
   const [dl, setDl]               = useState<DownloadsStatus | null>(null)
-  const prevDoneRef               = useRef(-1)
+  const prevSigRef                = useRef('')
   const [retrying, setRetrying]   = useState(false)
 
   const [cleanDlgOpen, setCleanDlgOpen] = useState(false)
@@ -84,7 +84,9 @@ export function Packages() {
 
   useEffect(() => { load() }, [load])
 
-  // Poll download status; refresh the package list whenever a download lands.
+  // Poll download status; refresh the package list whenever ANY counter
+  // changes (done, failed, downloading, pending) — not just completions,
+  // so a retry that fails again is still visible instead of looking frozen.
   useEffect(() => {
     let stop = false
     const tick = async () => {
@@ -92,14 +94,15 @@ export function Packages() {
         const s = await api.downloads.status()
         if (stop) return
         setDl(s)
-        if (prevDoneRef.current >= 0 && s.summary.done !== prevDoneRef.current) {
+        const sig = `${s.summary.done}:${s.summary.failed}:${s.summary.downloading}:${s.summary.pending}`
+        if (prevSigRef.current !== '' && sig !== prevSigRef.current) {
           api.packages.list(q).then(p => { if (!stop) setPackages(p ?? []) })
         }
-        prevDoneRef.current = s.summary.done
+        prevSigRef.current = sig
       } catch { /* server unreachable, keep last state */ }
     }
     tick()
-    const iv = setInterval(tick, 2500)
+    const iv = setInterval(tick, 2000)
     return () => { stop = true; clearInterval(iv) }
   }, [q])
 
@@ -142,6 +145,11 @@ export function Packages() {
     try {
       const r = await api.downloads.retryFailed()
       toast.success(`已重新排队 ${r.retrying} 个失败的下载`)
+      // Don't wait for the next poll tick — pull fresh state immediately so
+      // the failed → pending flip is visible right away.
+      const [s, p] = await Promise.all([api.downloads.status(), api.packages.list(q)])
+      setDl(s)
+      setPackages(p ?? [])
     } catch (e: unknown) {
       toast.error((e as Error).message)
     } finally {
@@ -191,7 +199,9 @@ export function Packages() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">插件包</h1>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            插件包 <Sparkles className="h-5 w-5 text-sakura sparkle-pulse" />
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {loading ? '加载中…' : `${groups.length} 个插件，共 ${packages.length} 个版本`}
           </p>
@@ -216,26 +226,26 @@ export function Packages() {
 
       {/* Cache summary strip */}
       {sum && sum.total > 0 && (
-        <div className="rounded-xl border border-border/60 bg-card p-4 space-y-3">
+        <div className="rounded-2xl border border-border/60 bg-card p-4 space-y-3 shadow-soft">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-5 text-sm flex-wrap">
               <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                <CheckCircle2 className="h-4 w-4 text-mint" />
                 <span className="font-medium tabular-nums">{sum.done}</span>
                 <span className="text-muted-foreground">已缓存</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <Download className={`h-4 w-4 text-blue-500 ${sum.downloading > 0 ? 'animate-pulse' : ''}`} />
+                <Download className={`h-4 w-4 text-lavender ${sum.downloading > 0 ? 'animate-pulse' : ''}`} />
                 <span className="font-medium tabular-nums">{sum.downloading}</span>
                 <span className="text-muted-foreground">下载中</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <Clock className="h-4 w-4 text-slate-400" />
+                <Clock className="h-4 w-4 text-muted-foreground" />
                 <span className="font-medium tabular-nums">{sum.pending}</span>
                 <span className="text-muted-foreground">排队中</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <XCircle className="h-4 w-4 text-red-500" />
+                <XCircle className="h-4 w-4 text-destructive" />
                 <span className="font-medium tabular-nums">{sum.failed}</span>
                 <span className="text-muted-foreground">失败</span>
               </span>
@@ -244,7 +254,7 @@ export function Packages() {
           </div>
           <div className="h-2 rounded-full bg-muted overflow-hidden">
             <div
-              className="h-full rounded-full bg-emerald-500 transition-all duration-700"
+              className="h-full rounded-full bg-gradient-to-r from-mint to-lavender transition-all duration-700"
               style={{ width: `${cachePct}%` }}
             />
           </div>
@@ -253,9 +263,9 @@ export function Packages() {
 
       {/* Active downloads panel */}
       {dl && dl.active.length > 0 && (
-        <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4 space-y-3">
+        <div className="relative rounded-2xl border border-lavender/30 bg-lavender/5 p-4 space-y-3 overflow-hidden">
           <p className="text-sm font-medium flex items-center gap-2">
-            <Download className="h-4 w-4 text-blue-500 animate-pulse" />
+            <Download className="h-4 w-4 text-lavender animate-pulse" />
             正在下载 {dl.active.length} 个文件
           </p>
           <div className="space-y-2.5">
@@ -272,14 +282,14 @@ export function Packages() {
                     }
                   </span>
                 </div>
-                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div className="relative h-1.5 rounded-full bg-muted overflow-hidden">
                   {a.total_bytes > 0 ? (
                     <div
-                      className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                      className="relative h-full rounded-full bg-gradient-to-r from-sakura to-lavender transition-all duration-500 overflow-hidden shimmer"
                       style={{ width: `${a.percent}%` }}
                     />
                   ) : (
-                    <div className="h-full w-1/3 rounded-full bg-blue-500/60 animate-pulse" />
+                    <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-sakura/60 to-lavender/60 animate-pulse" />
                   )}
                 </div>
               </div>
@@ -312,7 +322,7 @@ export function Packages() {
           <p className="text-sm">暂无插件包</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-border/60 overflow-hidden shadow-sm divide-y divide-border/50">
+        <div className="rounded-2xl border border-border/60 overflow-hidden shadow-soft divide-y divide-border/50">
           {visible.map(group => {
             const isOpen = expanded.has(group.name)
             return (
@@ -329,7 +339,7 @@ export function Packages() {
                     }
                   </div>
 
-                  <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary/20 to-violet-500/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0 border border-primary/10">
+                  <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-sakura/20 to-lavender/20 flex items-center justify-center text-[10px] font-bold text-sakura shrink-0 border border-sakura/10">
                     {initial(group.name)}
                   </div>
 
@@ -379,7 +389,7 @@ export function Packages() {
                                   <div className="flex items-center gap-2 min-w-[140px]">
                                     <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
                                       <div
-                                        className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                                        className="h-full rounded-full bg-gradient-to-r from-sakura to-lavender transition-all duration-500"
                                         style={{ width: `${act.total_bytes > 0 ? act.percent : 30}%` }}
                                       />
                                     </div>
@@ -394,7 +404,7 @@ export function Packages() {
                                     </Badge>
                                     {p.status === 'failed' && p.fail_reason && (
                                       <span
-                                        className="text-[10px] text-red-500/80 max-w-[260px] truncate"
+                                        className="text-[10px] text-destructive/80 max-w-[260px] truncate"
                                         title={p.fail_reason}
                                       >
                                         {p.fail_reason}
@@ -459,20 +469,20 @@ export function Packages() {
           ) : preview ? (
             <div className="space-y-3 py-2">
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg border p-3">
+                <div className="rounded-xl border border-border/60 p-3">
                   <p className="text-xs text-muted-foreground">旧版本</p>
                   <p className="text-2xl font-bold">{preview.lru_removed?.length ?? 0}</p>
                   <p className="text-xs text-muted-foreground">个文件将被删除</p>
                 </div>
-                <div className="rounded-lg border p-3">
+                <div className="rounded-xl border border-border/60 p-3">
                   <p className="text-xs text-muted-foreground">孤儿文件</p>
                   <p className="text-2xl font-bold">{preview.orphan_removed?.length ?? 0}</p>
                   <p className="text-xs text-muted-foreground">个文件将被删除</p>
                 </div>
               </div>
-              <div className="rounded-lg border p-3 bg-muted/30">
+              <div className="rounded-xl border border-border/60 p-3 bg-mint/10">
                 <p className="text-sm font-medium">预计释放空间</p>
-                <p className="text-xl font-bold text-green-600 dark:text-green-400">{fmtBytes(preview.bytes_freed)}</p>
+                <p className="text-xl font-bold text-mint">{fmtBytes(preview.bytes_freed)}</p>
               </div>
               {(preview.lru_removed?.length ?? 0) + (preview.orphan_removed?.length ?? 0) === 0 && (
                 <p className="text-sm text-center text-muted-foreground py-2">没有需要清理的文件</p>

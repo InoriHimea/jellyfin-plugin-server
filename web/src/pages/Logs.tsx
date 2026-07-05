@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Sparkles } from 'lucide-react'
 
 const LEVEL_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   INFO: 'secondary',
@@ -27,7 +27,9 @@ export function Logs() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">操作日志</h1>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          操作日志 <Sparkles className="h-5 w-5 text-sakura sparkle-pulse" />
+        </h1>
         <Button variant="outline" size="sm" onClick={load}>
           <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
           刷新

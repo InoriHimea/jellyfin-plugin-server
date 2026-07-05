@@ -4,52 +4,121 @@
 
 @layer base {
   :root {
-    --background: 220 20% 98%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 221 83% 53%;
+    /* Sakura Daylight */
+    --background: 330 45% 98%;
+    --foreground: 280 25% 22%;
+    --card: 320 45% 99%;
+    --card-foreground: 280 25% 22%;
+    --popover: 320 45% 99%;
+    --popover-foreground: 280 25% 22%;
+    --primary: 340 82% 66%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 94%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 220 14% 94%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 220 14% 94%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
+    --secondary: 262 55% 94%;
+    --secondary-foreground: 270 30% 25%;
+    --muted: 320 25% 95%;
+    --muted-foreground: 280 15% 48%;
+    --accent: 165 50% 90%;
+    --accent-foreground: 165 45% 22%;
+    --destructive: 354 78% 63%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 221 83% 53%;
-    --radius: 0.625rem;
+    --border: 325 30% 90%;
+    --input: 325 30% 90%;
+    --ring: 340 82% 66%;
+    --radius: 1.1rem;
+
+    /* Extra kawaii accents, referenced directly by class name */
+    --sakura: 340 82% 66%;
+    --lavender: 262 60% 78%;
+    --mint: 165 55% 68%;
   }
 
   .dark {
-    --background: 222 47% 7%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 217 91% 60%;
+    /* Yozora — night sky */
+    --background: 252 38% 9%;
+    --foreground: 260 35% 94%;
+    --card: 252 34% 13%;
+    --card-foreground: 260 35% 94%;
+    --popover: 252 34% 13%;
+    --popover-foreground: 260 35% 94%;
+    --primary: 332 85% 68%;
+    --primary-foreground: 252 40% 10%;
+    --secondary: 258 35% 20%;
+    --secondary-foreground: 260 35% 92%;
+    --muted: 255 30% 17%;
+    --muted-foreground: 260 20% 68%;
+    --accent: 180 55% 22%;
+    --accent-foreground: 175 70% 82%;
+    --destructive: 355 70% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 255 28% 22%;
+    --input: 255 28% 22%;
+    --ring: 332 85% 68%;
+
+    --sakura: 332 85% 68%;
+    --lavender: 262 70% 72%;
+    --mint: 175 65% 55%;
   }
 }
 
 @layer base {
   * { @apply border-border; }
-  body { @apply bg-background text-foreground; }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'M PLUS Rounded 1c', ui-sans-serif, system-ui, sans-serif;
+    background-image:
+      radial-gradient(ellipse 60% 50% at 8% -10%, hsl(var(--sakura) / 0.14), transparent),
+      radial-gradient(ellipse 55% 45% at 100% 0%, hsl(var(--lavender) / 0.16), transparent),
+      radial-gradient(ellipse 50% 40% at 50% 100%, hsl(var(--mint) / 0.08), transparent);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: hsl(var(--sakura) / 0.35);
+  }
+
+  /* Slim kawaii scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--sakura) / 0.35);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--sakura) / 0.55);
+    background-clip: padding-box;
+  }
+}
+
+@layer utilities {
+  .sparkle-pulse {
+    animation: sparkle 2.4s ease-in-out infinite;
+  }
+  .float-slow {
+    animation: float 6s ease-in-out infinite;
+  }
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.35), transparent);
+    animation: shimmer 1.6s linear infinite;
+  }
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 0.55; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
 }
