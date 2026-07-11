@@ -13,7 +13,6 @@ import (
 	"github.com/inorihimea/jellyfin-plugin-server/internal/downloader"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/logger"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/manifest"
-	proxyClient "github.com/inorihimea/jellyfin-plugin-server/internal/proxy"
 	"github.com/valyala/fasthttp"
 )
 
@@ -40,6 +39,8 @@ func PluginRouter(ctx *fasthttp.RequestCtx) {
 
 // handleImage proxies and disk-caches plugin images so clients never fetch
 // them from upstream hosts directly (which may be slow or unreachable).
+// Concurrency is bounded and failures are negative-cached — see images.go —
+// so a catalog page requesting 100+ images at once can't stampede upstream.
 func handleImage(ctx *fasthttp.RequestCtx, guid string) {
 	// GUIDs come from our own manifest — reject anything path-like.
 	if guid == "" || strings.ContainsAny(guid, "/\\.") {
@@ -53,6 +54,11 @@ func handleImage(ctx *fasthttp.RequestCtx, guid string) {
 		return
 	}
 
+	if imgRecentlyFailed(guid) {
+		writeJSON(ctx, fasthttp.StatusNotFound, map[string]string{"error": "image unavailable, will retry later"})
+		return
+	}
+
 	var upstream string
 	err := db.DB.QueryRow(
 		`SELECT image_url FROM plugins WHERE guid=? AND image_url<>'' LIMIT 1`, guid,
@@ -62,17 +68,13 @@ func handleImage(ctx *fasthttp.RequestCtx, guid string) {
 		return
 	}
 
-	resp, err := proxyClient.GetManifest(upstream, "", "")
-	if err != nil || resp.StatusCode != http.StatusOK || len(resp.Body) == 0 {
+	data, err := fetchAndCacheImage(guid, upstream)
+	if err != nil {
 		logger.Warn("image fetch failed", map[string]any{"err": err, "url": upstream})
 		writeJSON(ctx, fasthttp.StatusBadGateway, map[string]string{"error": "image fetch failed"})
 		return
 	}
-
-	if err := os.MkdirAll(config.ImagesDir(), 0755); err == nil {
-		_ = os.WriteFile(cachePath, resp.Body, 0644)
-	}
-	serveImage(ctx, resp.Body)
+	serveImage(ctx, data)
 }
 
 func serveImage(ctx *fasthttp.RequestCtx, data []byte) {

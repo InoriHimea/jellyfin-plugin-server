@@ -81,6 +81,10 @@ func FetchAndStore(repoID, repoURL string) (Catalog, bool, error) {
 	// Trigger background downloads for newly discovered versions.
 	go enqueuePending()
 
+	// Trigger background image prewarming so Jellyfin's catalog page never
+	// pays the upstream image-fetch cost itself.
+	go prewarmImages()
+
 	// Invalidate the in-memory unified manifest cache so the next request rebuilds it.
 	invalidateUnifiedCache()
 
@@ -88,9 +92,13 @@ func FetchAndStore(repoID, repoURL string) (Catalog, bool, error) {
 }
 
 var enqueuePending = func() {}
+var prewarmImages = func() {}
 
 // SetEnqueueFunc wires the downloader into the fetcher to avoid import cycles.
 func SetEnqueueFunc(fn func()) { enqueuePending = fn }
+
+// SetImagePrewarmFunc wires the image cache into the fetcher to avoid import cycles.
+func SetImagePrewarmFunc(fn func()) { prewarmImages = fn }
 
 func persistCatalog(repoID string, catalog Catalog) error {
 	tx, err := db.DB.Begin()

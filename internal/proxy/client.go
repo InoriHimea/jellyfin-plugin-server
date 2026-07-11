@@ -52,6 +52,11 @@ func buildManifestClient() *http.Client {
 		IdleConnTimeout:       60 * time.Second,
 		MaxIdleConns:          100,
 		MaxIdleConnsPerHost:   4,
+		// Hard cap on concurrent connections per host. Without this, a
+		// catalog page full of GitHub-hosted images (all the same host)
+		// can fan out to hundreds of simultaneous dials, which on a
+		// constrained NAS network path stalls everything else too.
+		MaxConnsPerHost: 8,
 	}
 	switch cfg.Type {
 	case config.ProxyHTTP, config.ProxyHTTPS:

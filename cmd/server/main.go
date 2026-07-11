@@ -52,9 +52,11 @@ func main() {
 	}
 
 	manifest.SetEnqueueFunc(downloader.EnqueueAllPending)
+	manifest.SetImagePrewarmFunc(handler.PrewarmImages)
 	go downloader.EnqueueAllPending()
 	go scheduledCleanup()
 	go startupRefresh(cfg) // warm the DB on startup so /manifest is immediately populated
+	go handler.PrewarmImages()
 	health.StartChecker(5 * time.Minute)
 
 	if err := os.MkdirAll(config.PackagesDir(), 0755); err != nil {
