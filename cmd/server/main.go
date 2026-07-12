@@ -53,9 +53,11 @@ func main() {
 
 	manifest.SetEnqueueFunc(downloader.EnqueueAllPending)
 	manifest.SetImagePrewarmFunc(handler.PrewarmImages)
+	downloader.RecoverStuckDownloads() // must run before any EnqueueAllPending call
 	go downloader.EnqueueAllPending()
 	go scheduledCleanup()
 	go startupRefresh(cfg) // warm the DB on startup so /manifest is immediately populated
+	go periodicManifestRefresh(cfg)
 	go handler.PrewarmImages()
 	health.StartChecker(5 * time.Minute)
 
@@ -117,6 +119,20 @@ func startupRefresh(cfg *config.Config) {
 	}
 	wg.Wait()
 	logger.Info("startup refresh complete", nil)
+}
+
+// periodicManifestRefresh re-checks every enabled repo's TTL on a timer and
+// refreshes any that have expired. Clients only ever poll the unified
+// /manifest endpoint, which reads whatever is already in the DB and never
+// triggers a fetch itself — so without this loop, a repo whose one-shot
+// startupRefresh attempt failed (or whose TTL expires mid-uptime) stays
+// stale until the process next restarts.
+func periodicManifestRefresh(cfg *config.Config) {
+	ticker := time.NewTicker(15 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		startupRefresh(cfg)
+	}
 }
 
 // scheduledCleanup runs storage cleanup once a day at 03:00 local time.

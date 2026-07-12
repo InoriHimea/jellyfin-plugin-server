@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -41,8 +42,69 @@ func Open(path string) error {
 	db.Exec(`ALTER TABLE plugins ADD COLUMN image_url TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE plugin_versions ADD COLUMN fail_reason TEXT NOT NULL DEFAULT ''`)
 
+	if err := migrateVersionAbiUnique(db); err != nil {
+		return fmt.Errorf("migrate plugin_versions unique key: %w", err)
+	}
+
 	DB = db
 	return nil
+}
+
+// migrateVersionAbiUnique upgrades plugin_versions' unique key from
+// (plugin_id, version) to (plugin_id, version, target_abi). The old key
+// let a repo's multiple ABI-targeted builds published under one version
+// number (e.g. separate 10.10/10.11 compat builds) collide: only the last
+// one processed survived, keeping the first row's target_abi paired with
+// the last row's checksum/source_url. SQLite can't alter a UNIQUE
+// constraint in place, so this rebuilds the table when the old constraint
+// is detected; a no-op on fresh databases that already have the new schema.
+func migrateVersionAbiUnique(db *sql.DB) error {
+	var ddl string
+	err := db.QueryRow(
+		`SELECT sql FROM sqlite_master WHERE type='table' AND name='plugin_versions'`,
+	).Scan(&ddl)
+	if err != nil {
+		return nil
+	}
+	if !strings.Contains(ddl, "UNIQUE(plugin_id, version)") {
+		return nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmts := []string{
+		`CREATE TABLE plugin_versions_new (
+			id             TEXT PRIMARY KEY,
+			plugin_id      TEXT NOT NULL REFERENCES plugins(id) ON DELETE CASCADE,
+			version        TEXT NOT NULL,
+			changelog      TEXT,
+			target_abi     TEXT,
+			source_url     TEXT NOT NULL,
+			checksum       TEXT NOT NULL,
+			timestamp      TEXT,
+			local_path     TEXT,
+			download_status TEXT NOT NULL DEFAULT 'pending',
+			downloaded_at  TEXT,
+			fail_reason    TEXT NOT NULL DEFAULT '',
+			UNIQUE(plugin_id, version, target_abi)
+		)`,
+		`INSERT INTO plugin_versions_new SELECT * FROM plugin_versions`,
+		`DROP TABLE plugin_versions`,
+		`ALTER TABLE plugin_versions_new RENAME TO plugin_versions`,
+		`CREATE INDEX IF NOT EXISTS idx_versions_plugin       ON plugin_versions(plugin_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_versions_status       ON plugin_versions(download_status)`,
+		`CREATE INDEX IF NOT EXISTS idx_versions_checksum     ON plugin_versions(checksum)`,
+	}
+	for _, s := range stmts {
+		if _, err := tx.Exec(s); err != nil {
+			return fmt.Errorf("%s: %w", s, err)
+		}
+	}
+	return tx.Commit()
 }
 
 func Close() {

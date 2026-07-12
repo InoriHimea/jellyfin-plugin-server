@@ -201,6 +201,23 @@ func markFailed(versionID, reason string) {
 	logger.Warn("download failed", map[string]any{"version_id": versionID, "reason": reason})
 }
 
+// RecoverStuckDownloads resets any version left in 'downloading' back to
+// 'pending'. A process restart kills every in-flight download goroutine, so
+// a row still marked 'downloading' at startup is orphaned: EnqueueAllPending
+// never re-queues that status, and nothing else will ever touch it again.
+// Call this once at boot, before EnqueueAllPending runs.
+func RecoverStuckDownloads() {
+	res, err := db.DB.Exec(`UPDATE plugin_versions SET download_status='pending' WHERE download_status='downloading'`)
+	if err != nil {
+		logger.Warn("recover stuck downloads failed", map[string]any{"err": err})
+		return
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		logger.Info("recovered stuck downloads", map[string]any{"count": n})
+		db.WriteLog("INFO", "recovered stuck downloads", fmt.Sprintf("count=%d", n))
+	}
+}
+
 // EnqueueAllPending enqueues all versions in 'pending' state, plus previously
 // 'failed' ones so transient network errors are retried on every refresh cycle.
 func EnqueueAllPending() {

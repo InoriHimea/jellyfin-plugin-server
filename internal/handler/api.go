@@ -136,7 +136,10 @@ func apiListPackages(ctx *fasthttp.RequestCtx) {
 		like := "%" + search + "%"
 		args = append(args, like, like)
 	}
-	query += ` ORDER BY p.name, v.version DESC LIMIT 200`
+	// No LIMIT: the frontend groups by plugin and paginates client-side, so it
+	// expects the full result set. A hardcoded cap here silently truncated the
+	// catalog (e.g. 200 rows out of 2000+) to whatever sorted first by name.
+	query += ` ORDER BY p.name, v.version DESC`
 
 	rows, err := db.DB.Query(query, args...)
 	if err != nil {

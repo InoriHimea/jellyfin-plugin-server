@@ -128,9 +128,14 @@ func persistCatalog(repoID string, catalog Catalog) error {
 		}
 
 		for _, v := range p.Versions {
+			// Keyed on (version, target_abi): some repos publish multiple ABI-targeted
+			// builds under the same version number (e.g. 10.10/10.11 compat builds).
+			// Matching on version alone collapses those into one row and silently
+			// discards the rest.
 			versionID := ""
 			_ = tx.QueryRow(
-				`SELECT id FROM plugin_versions WHERE plugin_id=? AND version=?`, pluginID, v.Version,
+				`SELECT id FROM plugin_versions WHERE plugin_id=? AND version=? AND target_abi=?`,
+				pluginID, v.Version, v.TargetABI,
 			).Scan(&versionID)
 
 			if versionID == "" {
@@ -294,10 +299,16 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 		}
 
 		e := seen[guid]
-		if e.seenVersions[ver] {
+		// Key on (version, targetAbi): different repos may legitimately publish
+		// different builds under the same version number for different ABI
+		// targets (e.g. a 10.10 compat build vs a 10.11 build). Deduping on
+		// version alone would let a higher-priority repo's same-numbered but
+		// different release silently shadow a lower-priority repo's build.
+		versionKey := ver + "|" + abi
+		if e.seenVersions[versionKey] {
 			continue
 		}
-		e.seenVersions[ver] = true
+		e.seenVersions[versionKey] = true
 
 		// Always use our server URL — handlePackage streams from upstream if not cached.
 		resolvedURL := localURL(baseURL, checksum, localPath, srcURL)

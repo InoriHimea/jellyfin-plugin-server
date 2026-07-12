@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS plugin_versions (
 	download_status TEXT NOT NULL DEFAULT 'pending',
 	downloaded_at  TEXT,
 	fail_reason    TEXT NOT NULL DEFAULT '',
-	UNIQUE(plugin_id, version)
+	UNIQUE(plugin_id, version, target_abi)
 );
 
 CREATE TABLE IF NOT EXISTS logs (
