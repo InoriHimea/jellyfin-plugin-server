@@ -10,7 +10,7 @@ const nav = [
   { to: '/catalog', label: '插件目录', icon: BookOpen },
   { to: '/repos', label: '仓库管理', icon: Database },
   { to: '/packages', label: '插件包', icon: Package },
-  { to: '/logs', label: '操作日志', icon: ScrollText },
+  { to: '/logs', label: '审计日志', icon: ScrollText },
   { to: '/settings', label: '系统设置', icon: Settings },
 ]
 

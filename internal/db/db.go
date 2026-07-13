@@ -126,3 +126,16 @@ func WriteLog(level, message, detail string) {
 		level, message, detail, Now(),
 	)
 }
+
+// PruneOldLogs deletes log entries older than the given retention window.
+// Now that every public-endpoint request is logged in addition to internal
+// events, the logs table grows unbounded on a long-running public
+// deployment without this — call on a daily schedule.
+func PruneOldLogs(days int) (int64, error) {
+	cutoff := time.Now().UTC().AddDate(0, 0, -days).Format(time.RFC3339)
+	res, err := DB.Exec(`DELETE FROM logs WHERE created_at < ?`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

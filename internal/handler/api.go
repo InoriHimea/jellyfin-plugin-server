@@ -407,11 +407,17 @@ func apiTestRepo(ctx *fasthttp.RequestCtx, id string) {
 }
 
 func apiLogs(ctx *fasthttp.RequestCtx) {
-	limit := 100
-	rows, err := db.DB.Query(
-		`SELECT id, level, message, COALESCE(detail,''), created_at
-		 FROM logs ORDER BY id DESC LIMIT ?`, limit,
-	)
+	search := string(ctx.QueryArgs().Peek("q"))
+	query := `SELECT id, level, message, COALESCE(detail,''), created_at FROM logs`
+	args := []any{}
+	if search != "" {
+		query += ` WHERE message LIKE ? OR detail LIKE ?`
+		like := "%" + search + "%"
+		args = append(args, like, like)
+	}
+	query += ` ORDER BY id DESC LIMIT 300`
+
+	rows, err := db.DB.Query(query, args...)
 	if err != nil {
 		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

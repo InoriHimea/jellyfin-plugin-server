@@ -146,7 +146,12 @@ func periodicManifestRefresh(cfg *config.Config) {
 	}
 }
 
-// scheduledCleanup runs storage cleanup once a day at 03:00 local time.
+// logRetentionDays bounds how long audit/access log entries are kept.
+// Now that every public-endpoint request is logged (not just internal
+// events), the logs table needs pruning on a long-running public deployment.
+const logRetentionDays = 30
+
+// scheduledCleanup runs storage and log cleanup once a day at 03:00 local time.
 func scheduledCleanup() {
 	for {
 		now := time.Now()
@@ -163,6 +168,11 @@ func scheduledCleanup() {
 				"orphan":     len(result.OrphanRemoved),
 				"bytes_freed": result.BytesFreed,
 			})
+		}
+		if n, err := db.PruneOldLogs(logRetentionDays); err != nil {
+			logger.Warn("log prune error", map[string]any{"err": err})
+		} else if n > 0 {
+			logger.Info("log prune done", map[string]any{"removed": n})
 		}
 	}
 }

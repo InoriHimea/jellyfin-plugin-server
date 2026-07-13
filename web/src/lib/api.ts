@@ -159,7 +159,7 @@ export const api = {
   },
 
   logs: {
-    list: () => req<LogEntry[]>('/api/logs'),
+    list: (q?: string) => req<LogEntry[]>('/api/logs' + (q ? '?q=' + encodeURIComponent(q) : '')),
   },
 
   config: {
