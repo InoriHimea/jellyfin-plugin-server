@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -231,6 +233,7 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 
 	catalog := make(Catalog, 0, len(order))
 	for _, g := range order {
+		sortVersionsDesc(pluginMap[g].Versions)
 		catalog = append(catalog, *pluginMap[g])
 	}
 	return catalog, nil
@@ -325,6 +328,7 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 
 	catalog := make(Catalog, 0, len(order))
 	for _, g := range order {
+		sortVersionsDesc(seen[g].p.Versions)
 		catalog = append(catalog, *seen[g].p)
 	}
 
@@ -333,6 +337,45 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 	unifiedMu.Unlock()
 
 	return catalog, nil
+}
+
+// sortVersionsDesc orders a plugin's versions newest-first by numeric
+// comparison of the version string, not by the order rows were collected
+// in. BuildUnifiedManifest gathers a plugin's versions repo-by-repo
+// (highest priority first), so without this every version from a
+// lower-priority repo — however new — would sort after all of a
+// higher-priority repo's versions instead of interleaving by recency.
+// Ties (same version, different targetAbi — e.g. separate 10.10/10.11
+// builds) break by timestamp, newest first.
+func sortVersionsDesc(versions []Version) {
+	sort.SliceStable(versions, func(i, j int) bool {
+		if c := compareVersionStrings(versions[i].Version, versions[j].Version); c != 0 {
+			return c > 0
+		}
+		return versions[i].Timestamp > versions[j].Timestamp
+	})
+}
+
+// compareVersionStrings compares two dot-separated numeric version strings
+// component-by-component, up to 4 parts — matching how .NET's
+// System.Version (what Jellyfin parses "version" as) compares versions.
+// Missing or non-numeric components count as 0. Returns >0 if a>b, <0 if
+// a<b, 0 if equal.
+func compareVersionStrings(a, b string) int {
+	pa, pb := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < 4; i++ {
+		var na, nb int
+		if i < len(pa) {
+			na, _ = strconv.Atoi(pa[i])
+		}
+		if i < len(pb) {
+			nb, _ = strconv.Atoi(pb[i])
+		}
+		if na != nb {
+			return na - nb
+		}
+	}
+	return 0
 }
 
 // localURL builds the URL our server uses to serve (or proxy) a plugin file.
