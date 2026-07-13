@@ -178,15 +178,22 @@ func apiDownloadsStatus(ctx *fasthttp.RequestCtx) {
 	rows, err := db.DB.Query(
 		`SELECT download_status, COUNT(*) FROM plugin_versions GROUP BY download_status`,
 	)
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var status string
-			var n int
-			if rows.Scan(&status, &n) == nil {
-				summary[status] = n
-				summary["total"] += n
-			}
+	if err != nil {
+		// Previously fell through silently and returned an all-zero summary,
+		// which looks identical to "nothing queued" instead of "query failed"
+		// (e.g. under SQLite write contention from a concurrent repo-refresh
+		// burst) — logging and surfacing the error makes that distinguishable.
+		logger.Warn("downloads status query failed", map[string]any{"err": err})
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var status string
+		var n int
+		if rows.Scan(&status, &n) == nil {
+			summary[status] = n
+			summary["total"] += n
 		}
 	}
 

@@ -91,14 +91,23 @@ func main() {
 	logger.Info("bye")
 }
 
-// startupRefresh fetches all enabled repos in parallel when the server boots.
-// It only fetches repos whose TTL has expired, so subsequent restarts are cheap.
+// refreshConcurrency bounds how many repo manifests fetch (and persist to
+// SQLite) at once. One goroutine per repo — up to 97 at once — contends
+// badly for SQLite's single writer lock against downloads and readers,
+// intermittently timing out or 500ing /manifest, the one endpoint Jellyfin
+// actually polls. Mirrors the download semaphore's approach.
+const refreshConcurrency = 6
+
+// startupRefresh fetches all enabled repos when the server boots, bounded to
+// refreshConcurrency at a time. It only fetches repos whose TTL has expired,
+// so subsequent restarts are cheap.
 func startupRefresh(cfg *config.Config) {
 	repos, err := db.ListRepos()
 	if err != nil {
 		logger.Warn("startup refresh: list repos failed", map[string]any{"err": err})
 		return
 	}
+	sem := make(chan struct{}, refreshConcurrency)
 	var wg sync.WaitGroup
 	for _, r := range repos {
 		if !r.Enabled {
@@ -110,6 +119,8 @@ func startupRefresh(cfg *config.Config) {
 		wg.Add(1)
 		go func(r db.Repo) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			if _, _, err := manifest.FetchAndStore(r.ID, r.URL); err != nil {
 				logger.Warn("startup refresh failed", map[string]any{"repo": r.Name, "err": err})
 			} else {
