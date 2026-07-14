@@ -41,7 +41,7 @@ func withLogger(h fasthttp.RequestHandler) fasthttp.RequestHandler {
 		// login (itself audited in apiLogin), and logging every 2-second
 		// dashboard poll would bury anything worth seeing.
 		if isAuditPath(path) {
-			go db.WriteLog("INFO", "http access", fmt.Sprintf(
+			go db.WriteLogTyped("access", "INFO", "http access", fmt.Sprintf(
 				"ip=%s method=%s path=%s status=%d latency_ms=%d",
 				ip, string(ctx.Method()), path, status, latencyMs,
 			))

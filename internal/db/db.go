@@ -41,6 +41,8 @@ func Open(path string) error {
 	// Migrations for existing databases — errors are ignored when column already exists.
 	db.Exec(`ALTER TABLE plugins ADD COLUMN image_url TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE plugin_versions ADD COLUMN fail_reason TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE logs ADD COLUMN type TEXT NOT NULL DEFAULT 'system'`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_logs_type ON logs(type)`)
 
 	if err := migrateVersionAbiUnique(db); err != nil {
 		return fmt.Errorf("migrate plugin_versions unique key: %w", err)
@@ -117,13 +119,22 @@ func Now() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }
 
+// WriteLog records an internal operational event (type='system') — manifest
+// fetched, package downloaded, disk limit hit, etc.
 func WriteLog(level, message, detail string) {
+	WriteLogTyped("system", level, message, detail)
+}
+
+// WriteLogTyped records a log entry under an explicit category so the audit
+// log UI can filter by it — "auth" for login/logout, "access" for public
+// endpoint hits, "system" for everything else.
+func WriteLogTyped(logType, level, message, detail string) {
 	if DB == nil {
 		return
 	}
 	DB.Exec(
-		`INSERT INTO logs (level, message, detail, created_at) VALUES (?, ?, ?, ?)`,
-		level, message, detail, Now(),
+		`INSERT INTO logs (type, level, message, detail, created_at) VALUES (?, ?, ?, ?, ?)`,
+		logType, level, message, detail, Now(),
 	)
 }
 

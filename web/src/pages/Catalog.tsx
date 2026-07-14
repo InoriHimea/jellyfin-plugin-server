@@ -2,13 +2,16 @@ import { useEffect, useState, useRef } from 'react'
 import { api, type CatalogEntry } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import {
   Download, Search, RefreshCw, CheckCircle2, Loader2, Clock,
-  AlertCircle, Package, ChevronDown, ChevronRight, Layers, Sparkles,
+  AlertCircle, Package, Layers, Sparkles,
 } from 'lucide-react'
 
-const PAGE = 20
+const PAGE = 24
 
 const CAT_COLOR: Record<string, string> = {
   MoviesAndShows: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
@@ -34,13 +37,35 @@ const STATUS_CFG = {
 
 type StatusKey = keyof typeof STATUS_CFG
 
+function PluginIcon({ guid, imageUrl, name, size = 'md' }: { guid: string; imageUrl?: string; name: string; size?: 'md' | 'lg' }) {
+  const [failed, setFailed] = useState(false)
+  const dims = size === 'lg' ? 'h-16 w-16 text-lg' : 'h-11 w-11 text-xs'
+
+  if (imageUrl && !failed) {
+    return (
+      <img
+        src={`/plugins/images/${guid}`}
+        alt={name}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className={`${dims} rounded-2xl object-cover border border-border/40 shrink-0 bg-muted`}
+      />
+    )
+  }
+  return (
+    <div className={`${dims} rounded-2xl bg-gradient-to-br from-sakura/20 to-lavender/20 flex items-center justify-center font-bold text-sakura shrink-0 border border-sakura/10`}>
+      {name.slice(0, 2).toUpperCase()}
+    </div>
+  )
+}
+
 export function Catalog() {
   const [entries, setEntries]       = useState<CatalogEntry[]>([])
   const [loading, setLoading]       = useState(true)
   const [downloading, setDownloading] = useState<Set<string>>(new Set())
   const [search, setSearch]         = useState('')
   const [activeCategory, setActiveCat] = useState('全部')
-  const [expanded, setExpanded]     = useState<Set<string>>(new Set())
+  const [detail, setDetail]         = useState<CatalogEntry | null>(null)
   const [page, setPage]             = useState(1)
   const sentinelRef                 = useRef<HTMLDivElement>(null)
 
@@ -81,13 +106,6 @@ export function Catalog() {
     return () => obs.disconnect()
   }, [hasMore, visible.length])
 
-  const toggle = (guid: string) =>
-    setExpanded(prev => {
-      const next = new Set(prev)
-      next.has(guid) ? next.delete(guid) : next.add(guid)
-      return next
-    })
-
   const triggerDownload = async (e: CatalogEntry) => {
     setDownloading(prev => new Set(prev).add(e.guid))
     try {
@@ -100,8 +118,6 @@ export function Catalog() {
       setDownloading(prev => { const s = new Set(prev); s.delete(e.guid); return s })
     }
   }
-
-  const initial = (name: string) => name.slice(0, 2).toUpperCase()
 
   return (
     <div className="p-6 space-y-5">
@@ -149,11 +165,11 @@ export function Catalog() {
         </div>
       </div>
 
-      {/* List */}
+      {/* Card grid */}
       {loading ? (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-14 rounded-lg bg-muted/50 animate-pulse" />
+            <div key={i} className="h-[168px] rounded-2xl bg-muted/50 animate-pulse" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -162,47 +178,38 @@ export function Catalog() {
           <p className="text-sm">没有匹配的插件</p>
         </div>
       ) : (
-        <div className="rounded-2xl border border-border/60 overflow-hidden shadow-soft divide-y divide-border/50">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {visible.map(e => {
             const cat     = e.category || 'General'
-            const isOpen  = expanded.has(e.guid)
             const isDoing = downloading.has(e.guid)
             const status  = STATUS_CFG[(e.latest_status || '') as StatusKey] ?? STATUS_CFG['']
             const StatusIcon = status.icon
 
             return (
-              <div key={e.guid} className="bg-card">
-                {/* Row */}
-                <div
-                  className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors select-none"
-                  onClick={() => toggle(e.guid)}
-                >
-                  {/* Chevron */}
-                  <div className="text-muted-foreground shrink-0">
-                    {isOpen
-                      ? <ChevronDown className="h-4 w-4" />
-                      : <ChevronRight className="h-4 w-4" />
-                    }
-                  </div>
-
-                  {/* Icon */}
-                  <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-sakura/20 to-lavender/20 flex items-center justify-center text-[10px] font-bold text-sakura shrink-0 border border-sakura/10">
-                    {initial(e.name)}
-                  </div>
-
-                  {/* Name + category */}
+              <div
+                key={e.guid}
+                onClick={() => setDetail(e)}
+                className="group flex flex-col rounded-2xl border border-border/60 bg-card p-4 shadow-soft hover:shadow-md hover:border-primary/40 transition-all cursor-pointer"
+              >
+                <div className="flex items-start gap-3">
+                  <PluginIcon guid={e.guid} imageUrl={e.image_url} name={e.name} />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium leading-none">{e.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${catColor(cat)}`}>
-                        {cat}
-                      </span>
-                    </div>
+                    <p className="text-sm font-semibold leading-tight truncate">{e.name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">{e.owner || e.repo_name}</p>
+                    <span className={`inline-block mt-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${catColor(cat)}`}>
+                      {cat}
+                    </span>
                   </div>
+                </div>
 
-                  {/* Version + status */}
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+                {(e.description || e.overview) && (
+                  <p className="text-xs text-muted-foreground mt-3 line-clamp-2 leading-relaxed">
+                    {e.description || e.overview}
+                  </p>
+                )}
+
+                <div className="mt-auto pt-3 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <StatusIcon className={`h-3.5 w-3.5 ${status.cls}`} />
                     <span className="font-mono">{e.latest_version ? `v${e.latest_version}` : '—'}</span>
                     {e.version_count > 1 && (
@@ -212,50 +219,21 @@ export function Catalog() {
                       </span>
                     )}
                   </div>
-
-                  {/* Download button */}
                   <Button
                     size="sm"
                     variant={e.latest_status === 'done' ? 'outline' : 'default'}
-                    className="h-7 text-xs gap-1.5 shrink-0"
+                    className="h-7 w-7 p-0 shrink-0"
                     disabled={isDoing || e.latest_status === 'downloading'}
                     onClick={ev => { ev.stopPropagation(); triggerDownload(e) }}
                   >
                     {isDoing || e.latest_status === 'downloading'
-                      ? <><Loader2 className="h-3 w-3 animate-spin" />下载中</>
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       : e.latest_status === 'done'
-                        ? <><CheckCircle2 className="h-3 w-3" />重新下载</>
-                        : <><Download className="h-3 w-3" />下载</>
+                        ? <CheckCircle2 className="h-3.5 w-3.5" />
+                        : <Download className="h-3.5 w-3.5" />
                     }
                   </Button>
                 </div>
-
-                {/* Expanded details */}
-                {isOpen && (
-                  <div className="px-4 pb-4 pt-1 ml-7 space-y-3 border-t border-border/30 bg-muted/10">
-                    {/* Description */}
-                    {(e.description || e.overview) && (
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        {e.description || e.overview}
-                      </p>
-                    )}
-
-                    {/* Meta */}
-                    <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                      {e.owner && (
-                        <span><span className="font-medium text-foreground/60">作者</span>：{e.owner}</span>
-                      )}
-                      {e.repo_name && (
-                        <span><span className="font-medium text-foreground/60">来源</span>：{e.repo_name}</span>
-                      )}
-                      {e.version_count > 1 && (
-                        <span>
-                          <span className="font-medium text-foreground/60">版本数</span>：{e.version_count} 个可用，最新 v{e.latest_version}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
             )
           })}
@@ -277,6 +255,64 @@ export function Catalog() {
           )}
         </div>
       )}
+
+      {/* Detail dialog */}
+      <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
+        <DialogContent className="max-w-lg">
+          {detail && (
+            <>
+              <DialogHeader>
+                <div className="flex items-start gap-3">
+                  <PluginIcon guid={detail.guid} imageUrl={detail.image_url} name={detail.name} size="lg" />
+                  <div className="min-w-0 pt-1">
+                    <DialogTitle>{detail.name}</DialogTitle>
+                    <DialogDescription className="mt-1">
+                      {detail.owner && <>作者：{detail.owner}　</>}
+                      来源：{detail.repo_name}
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="space-y-3 py-2">
+                <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium ${catColor(detail.category || 'General')}`}>
+                  {detail.category || 'General'}
+                </span>
+                {(detail.description || detail.overview) && (
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {detail.description || detail.overview}
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+                  <span>
+                    <span className="font-medium text-foreground/60">最新版本</span>：v{detail.latest_version || '—'}
+                  </span>
+                  {detail.version_count > 1 && (
+                    <span>
+                      <span className="font-medium text-foreground/60">可用版本</span>：{detail.version_count} 个
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDetail(null)}>关闭</Button>
+                <Button
+                  disabled={downloading.has(detail.guid) || detail.latest_status === 'downloading'}
+                  onClick={() => triggerDownload(detail)}
+                >
+                  {downloading.has(detail.guid) || detail.latest_status === 'downloading'
+                    ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />下载中</>
+                    : detail.latest_status === 'done'
+                      ? <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />重新下载</>
+                      : <><Download className="h-3.5 w-3.5 mr-1.5" />下载</>
+                  }
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

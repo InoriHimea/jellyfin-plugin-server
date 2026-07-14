@@ -408,12 +408,22 @@ func apiTestRepo(ctx *fasthttp.RequestCtx, id string) {
 
 func apiLogs(ctx *fasthttp.RequestCtx) {
 	search := string(ctx.QueryArgs().Peek("q"))
-	query := `SELECT id, level, message, COALESCE(detail,''), created_at FROM logs`
+	logType := string(ctx.QueryArgs().Peek("type"))
+
+	query := `SELECT id, type, level, message, COALESCE(detail,''), created_at FROM logs`
+	var conditions []string
 	args := []any{}
 	if search != "" {
-		query += ` WHERE message LIKE ? OR detail LIKE ?`
+		conditions = append(conditions, `(message LIKE ? OR detail LIKE ?)`)
 		like := "%" + search + "%"
 		args = append(args, like, like)
+	}
+	if logType != "" {
+		conditions = append(conditions, `type = ?`)
+		args = append(args, logType)
+	}
+	if len(conditions) > 0 {
+		query += ` WHERE ` + strings.Join(conditions, " AND ")
 	}
 	query += ` ORDER BY id DESC LIMIT 300`
 
@@ -426,6 +436,7 @@ func apiLogs(ctx *fasthttp.RequestCtx) {
 
 	type logEntry struct {
 		ID        int64  `json:"id"`
+		Type      string `json:"type"`
 		Level     string `json:"level"`
 		Message   string `json:"message"`
 		Detail    string `json:"detail,omitempty"`
@@ -434,7 +445,7 @@ func apiLogs(ctx *fasthttp.RequestCtx) {
 	var entries []logEntry
 	for rows.Next() {
 		var e logEntry
-		if err := rows.Scan(&e.ID, &e.Level, &e.Message, &e.Detail, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.Type, &e.Level, &e.Message, &e.Detail, &e.CreatedAt); err != nil {
 			continue
 		}
 		entries = append(entries, e)
@@ -484,6 +495,7 @@ type catalogEntry struct {
 	Owner         string `json:"owner"`
 	Category      string `json:"category"`
 	RepoName      string `json:"repo_name"`
+	ImageURL      string `json:"image_url,omitempty"`
 	VersionID     string `json:"version_id"`
 	LatestVersion string `json:"latest_version"`
 	LatestStatus  string `json:"latest_status"`
@@ -493,7 +505,7 @@ type catalogEntry struct {
 func apiCatalog(ctx *fasthttp.RequestCtx) {
 	rows, err := db.DB.Query(`
 		SELECT p.guid, p.name, COALESCE(p.description,''), COALESCE(p.overview,''),
-		       COALESCE(p.owner,''), COALESCE(p.category,''), r.name,
+		       COALESCE(p.owner,''), COALESCE(p.category,''), r.name, COALESCE(p.image_url,''),
 		       COALESCE((SELECT pv.id FROM plugin_versions pv WHERE pv.plugin_id=p.id ORDER BY pv.timestamp DESC LIMIT 1),''),
 		       COALESCE((SELECT pv.version FROM plugin_versions pv WHERE pv.plugin_id=p.id ORDER BY pv.timestamp DESC LIMIT 1),''),
 		       COALESCE((SELECT pv.download_status FROM plugin_versions pv WHERE pv.plugin_id=p.id ORDER BY pv.timestamp DESC LIMIT 1),''),
@@ -514,7 +526,7 @@ func apiCatalog(ctx *fasthttp.RequestCtx) {
 	for rows.Next() {
 		var e catalogEntry
 		if err := rows.Scan(&e.GUID, &e.Name, &e.Description, &e.Overview,
-			&e.Owner, &e.Category, &e.RepoName,
+			&e.Owner, &e.Category, &e.RepoName, &e.ImageURL,
 			&e.VersionID, &e.LatestVersion, &e.LatestStatus, &e.VersionCount); err != nil {
 			continue
 		}

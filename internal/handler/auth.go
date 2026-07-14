@@ -36,7 +36,7 @@ func apiLogin(ctx *fasthttp.RequestCtx) {
 			writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "could not create session"})
 			return
 		}
-		db.WriteLog("INFO", "login success", fmt.Sprintf("ip=%s auth=disabled", ip))
+		db.WriteLogTyped("auth", "INFO", "login success", fmt.Sprintf("ip=%s auth=disabled", ip))
 		writeJSON(ctx, fasthttp.StatusOK, map[string]string{"token": token})
 		return
 	}
@@ -51,7 +51,7 @@ func apiLogin(ctx *fasthttp.RequestCtx) {
 	}
 
 	if req.Username != cfg.Auth.Username || req.Password != cfg.Auth.Password {
-		db.WriteLog("WARN", "login failed", fmt.Sprintf("ip=%s username=%s", ip, req.Username))
+		db.WriteLogTyped("auth", "WARN", "login failed", fmt.Sprintf("ip=%s username=%s", ip, req.Username))
 		writeJSON(ctx, fasthttp.StatusUnauthorized, map[string]string{"error": "用户名或密码错误"})
 		return
 	}
@@ -61,7 +61,7 @@ func apiLogin(ctx *fasthttp.RequestCtx) {
 		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "could not create session"})
 		return
 	}
-	db.WriteLog("INFO", "login success", fmt.Sprintf("ip=%s username=%s", ip, req.Username))
+	db.WriteLogTyped("auth", "INFO", "login success", fmt.Sprintf("ip=%s username=%s", ip, req.Username))
 	writeJSON(ctx, fasthttp.StatusOK, map[string]string{"token": token})
 }
 
@@ -69,6 +69,6 @@ func apiLogin(ctx *fasthttp.RequestCtx) {
 // Protected — requires a valid token.
 func apiLogout(ctx *fasthttp.RequestCtx) {
 	revokeSession(tokenFromCtx(ctx))
-	db.WriteLog("INFO", "logout", fmt.Sprintf("ip=%s", clientIP(ctx)))
+	db.WriteLogTyped("auth", "INFO", "logout", fmt.Sprintf("ip=%s", clientIP(ctx)))
 	writeJSON(ctx, fasthttp.StatusOK, map[string]bool{"ok": true})
 }

@@ -24,6 +24,7 @@ export interface Package {
 
 export interface LogEntry {
   id: number
+  type: string
   level: string
   message: string
   detail?: string
@@ -46,6 +47,7 @@ export interface CatalogEntry {
   owner: string
   category: string
   repo_name: string
+  image_url?: string
   version_id: string
   latest_version: string
   latest_status: 'pending' | 'downloading' | 'done' | 'failed' | ''
@@ -159,7 +161,13 @@ export const api = {
   },
 
   logs: {
-    list: (q?: string) => req<LogEntry[]>('/api/logs' + (q ? '?q=' + encodeURIComponent(q) : '')),
+    list: (q?: string, type?: string) => {
+      const params = new URLSearchParams()
+      if (q) params.set('q', q)
+      if (type) params.set('type', type)
+      const qs = params.toString()
+      return req<LogEntry[]>('/api/logs' + (qs ? '?' + qs : ''))
+    },
   },
 
   config: {
