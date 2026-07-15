@@ -351,19 +351,21 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 // builds) break by timestamp, newest first.
 func sortVersionsDesc(versions []Version) {
 	sort.SliceStable(versions, func(i, j int) bool {
-		if c := compareVersionStrings(versions[i].Version, versions[j].Version); c != 0 {
+		if c := CompareVersionStrings(versions[i].Version, versions[j].Version); c != 0 {
 			return c > 0
 		}
 		return versions[i].Timestamp > versions[j].Timestamp
 	})
 }
 
-// compareVersionStrings compares two dot-separated numeric version strings
+// CompareVersionStrings compares two dot-separated numeric version strings
 // component-by-component, up to 4 parts — matching how .NET's
 // System.Version (what Jellyfin parses "version" as) compares versions.
 // Missing or non-numeric components count as 0. Returns >0 if a>b, <0 if
-// a<b, 0 if equal.
-func compareVersionStrings(a, b string) int {
+// a<b, 0 if equal. Exported so other packages (e.g. the catalog API,
+// which needs the same "which version is actually newest" logic across
+// repos) don't reimplement it.
+func CompareVersionStrings(a, b string) int {
 	pa, pb := strings.Split(a, "."), strings.Split(b, ".")
 	for i := 0; i < 4; i++ {
 		var na, nb int

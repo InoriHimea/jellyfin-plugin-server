@@ -30,7 +30,7 @@ var defaultRepos = []struct {
 		Priority: 100,
 	},
 	{
-		Name:     "Jellyfin Official (Unstable / Nightly)",
+		Name:     "Jellyfin Official Unstable",
 		URL:      "https://repo.jellyfin.org/master/plugin-unstable/manifest.json",
 		Priority: 98,
 	},

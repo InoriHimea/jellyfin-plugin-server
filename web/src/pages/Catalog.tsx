@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { api, type CatalogEntry } from '@/lib/api'
+import { api, type CatalogEntry, type CatalogVersionEntry } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -66,6 +66,8 @@ export function Catalog() {
   const [search, setSearch]         = useState('')
   const [activeCategory, setActiveCat] = useState('全部')
   const [detail, setDetail]         = useState<CatalogEntry | null>(null)
+  const [versions, setVersions]     = useState<CatalogVersionEntry[]>([])
+  const [versionsLoading, setVersionsLoading] = useState(false)
   const [page, setPage]             = useState(1)
   const sentinelRef                 = useRef<HTMLDivElement>(null)
 
@@ -74,6 +76,16 @@ export function Catalog() {
     api.catalog.list().then(setEntries).finally(() => setLoading(false))
   }
   useEffect(load, [])
+
+  // Fetch the real per-version list on demand — the card only carries a
+  // "latest version" summary, not the full history.
+  useEffect(() => {
+    if (!detail) { setVersions([]); return }
+    setVersionsLoading(true)
+    api.catalog.versions(detail.guid)
+      .then(setVersions)
+      .finally(() => setVersionsLoading(false))
+  }, [detail])
 
   const categories = ['全部', ...Array.from(new Set(entries.map(e => e.category || 'General'))).sort()]
 
@@ -283,15 +295,37 @@ export function Catalog() {
                     {detail.description || detail.overview}
                   </p>
                 )}
-                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                  <span>
-                    <span className="font-medium text-foreground/60">最新版本</span>：v{detail.latest_version || '—'}
-                  </span>
-                  {detail.version_count > 1 && (
-                    <span>
-                      <span className="font-medium text-foreground/60">可用版本</span>：{detail.version_count} 个
-                    </span>
-                  )}
+
+                <div>
+                  <p className="text-xs font-medium text-foreground/60 mb-1.5">
+                    可用版本{versions.length > 0 && <span className="tabular-nums"> · {versions.length} 个</span>}
+                  </p>
+                  <div className="rounded-xl border border-border/60 divide-y divide-border/50 max-h-64 overflow-y-auto">
+                    {versionsLoading ? (
+                      <div className="py-6 text-center text-xs text-muted-foreground">加载中…</div>
+                    ) : versions.length === 0 ? (
+                      <div className="py-6 text-center text-xs text-muted-foreground">没有可用版本</div>
+                    ) : (
+                      versions.map(v => {
+                        const vStatus = STATUS_CFG[(v.status || '') as StatusKey] ?? STATUS_CFG['']
+                        const VIcon = vStatus.icon
+                        return (
+                          <div key={v.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                            <span className="font-mono font-medium shrink-0">v{v.version}</span>
+                            {v.target_abi && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground shrink-0">
+                                ABI {v.target_abi}
+                              </span>
+                            )}
+                            <span className="text-muted-foreground truncate flex-1" title={v.changelog}>
+                              {v.changelog || v.repo_name}
+                            </span>
+                            <VIcon className={`h-3.5 w-3.5 shrink-0 ${vStatus.cls}`} />
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
 

@@ -59,6 +59,17 @@ export interface CatalogEntry {
   version_count: number
 }
 
+export interface CatalogVersionEntry {
+  id: string
+  version: string
+  target_abi: string
+  changelog?: string
+  checksum: string
+  status: 'pending' | 'downloading' | 'done' | 'failed' | ''
+  timestamp: string
+  repo_name: string
+}
+
 export interface CleanResult {
   lru_removed: string[]
   orphan_removed: string[]
@@ -185,6 +196,7 @@ export const api = {
 
   catalog: {
     list: () => req<CatalogEntry[]>('/api/catalog'),
+    versions: (guid: string) => req<CatalogVersionEntry[]>(`/api/catalog/${guid}/versions`),
     download: (guid: string) => req<{ status: string }>(`/api/catalog/${guid}/download`, { method: 'POST' }),
   },
 }

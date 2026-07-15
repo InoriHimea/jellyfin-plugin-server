@@ -43,6 +43,12 @@ func Open(path string) error {
 	db.Exec(`ALTER TABLE plugin_versions ADD COLUMN fail_reason TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE logs ADD COLUMN type TEXT NOT NULL DEFAULT 'system'`)
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_logs_type ON logs(type)`)
+	// SeedDefaultRepos is INSERT OR IGNORE keyed on url, so renaming a
+	// built-in repo in code never reaches rows already seeded on existing
+	// deployments — update by url explicitly instead.
+	db.Exec(`UPDATE repos SET name='Jellyfin Official Unstable'
+	         WHERE url='https://repo.jellyfin.org/master/plugin-unstable/manifest.json'
+	           AND name != 'Jellyfin Official Unstable'`)
 
 	if err := migrateVersionAbiUnique(db); err != nil {
 		return fmt.Errorf("migrate plugin_versions unique key: %w", err)

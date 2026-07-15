@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -68,6 +69,8 @@ func APIRouter(ctx *fasthttp.RequestCtx) {
 
 	case path == "/catalog" && method == "GET":
 		apiCatalog(ctx)
+	case catalogVersionsPath(path) && method == "GET":
+		apiCatalogVersions(ctx, catalogVersionsGUID(path))
 	case catalogDownloadPath(path) && method == "POST":
 		apiCatalogDownload(ctx, catalogGUID(path))
 
@@ -512,6 +515,16 @@ func catalogGUID(path string) string {
 	return strings.TrimSuffix(trimmed, "/download")
 }
 
+func catalogVersionsPath(path string) bool {
+	trimmed := strings.TrimPrefix(path, "/catalog/")
+	return strings.HasPrefix(path, "/catalog/") && strings.HasSuffix(trimmed, "/versions") && trimmed != "/versions"
+}
+
+func catalogVersionsGUID(path string) string {
+	trimmed := strings.TrimPrefix(path, "/catalog/")
+	return strings.TrimSuffix(trimmed, "/versions")
+}
+
 type catalogEntry struct {
 	GUID          string `json:"guid"`
 	Name          string `json:"name"`
@@ -527,16 +540,24 @@ type catalogEntry struct {
 	VersionCount  int    `json:"version_count"`
 }
 
+// apiCatalog lists one card per plugin GUID, merged across every enabled
+// repo. Metadata (name/description/owner/image) comes from the
+// highest-priority repo that has the plugin — the first row encountered per
+// guid, since rows are ordered by priority — but "latest version" is
+// determined by comparing version numbers across ALL contributing repos,
+// not just the highest-priority one's own listing. A repo like trakt-ex
+// (low priority, so it never wins on metadata) can still legitimately
+// publish the numerically newest build, and Jellyfin's /manifest already
+// reflects that via BuildUnifiedManifest — this query used to look only at
+// the winning repo's own versions and would show a stale "latest".
 func apiCatalog(ctx *fasthttp.RequestCtx) {
 	rows, err := db.DB.Query(`
 		SELECT p.guid, p.name, COALESCE(p.description,''), COALESCE(p.overview,''),
 		       COALESCE(p.owner,''), COALESCE(p.category,''), r.name, COALESCE(p.image_url,''),
-		       COALESCE((SELECT pv.id FROM plugin_versions pv WHERE pv.plugin_id=p.id ORDER BY pv.timestamp DESC LIMIT 1),''),
-		       COALESCE((SELECT pv.version FROM plugin_versions pv WHERE pv.plugin_id=p.id ORDER BY pv.timestamp DESC LIMIT 1),''),
-		       COALESCE((SELECT pv.download_status FROM plugin_versions pv WHERE pv.plugin_id=p.id ORDER BY pv.timestamp DESC LIMIT 1),''),
-		       (SELECT COUNT(*) FROM plugin_versions WHERE plugin_id=p.id)
+		       v.id, v.version, v.download_status
 		FROM plugins p
 		JOIN repos r ON r.id=p.repo_id
+		JOIN plugin_versions v ON v.plugin_id = p.id
 		WHERE r.enabled=1
 		ORDER BY r.priority DESC, p.guid
 	`)
@@ -546,38 +567,117 @@ func apiCatalog(ctx *fasthttp.RequestCtx) {
 	}
 	defer rows.Close()
 
-	seen := make(map[string]bool)
-	var entries []catalogEntry
+	agg := make(map[string]*catalogEntry)
+	var order []string
 	for rows.Next() {
-		var e catalogEntry
-		if err := rows.Scan(&e.GUID, &e.Name, &e.Description, &e.Overview,
-			&e.Owner, &e.Category, &e.RepoName, &e.ImageURL,
-			&e.VersionID, &e.LatestVersion, &e.LatestStatus, &e.VersionCount); err != nil {
+		var guid, name, desc, overview, owner, cat, repoName, imageURL string
+		var verID, ver, status string
+		if err := rows.Scan(&guid, &name, &desc, &overview, &owner, &cat, &repoName, &imageURL,
+			&verID, &ver, &status); err != nil {
 			continue
 		}
-		if seen[e.GUID] {
-			continue
+
+		e, ok := agg[guid]
+		if !ok {
+			e = &catalogEntry{
+				GUID: guid, Name: name, Description: desc, Overview: overview,
+				Owner: owner, Category: cat, RepoName: repoName, ImageURL: imageURL,
+			}
+			agg[guid] = e
+			order = append(order, guid)
 		}
-		seen[e.GUID] = true
-		entries = append(entries, e)
+
+		e.VersionCount++
+		if e.LatestVersion == "" || manifest.CompareVersionStrings(ver, e.LatestVersion) > 0 {
+			e.LatestVersion = ver
+			e.LatestStatus = status
+			e.VersionID = verID
+		}
 	}
-	if entries == nil {
-		entries = []catalogEntry{}
+
+	entries := make([]catalogEntry, 0, len(order))
+	for _, g := range order {
+		entries = append(entries, *agg[g])
 	}
 	writeJSON(ctx, fasthttp.StatusOK, entries)
 }
 
+// apiCatalogVersions lists every version of a plugin across all enabled
+// repos, newest first — the detail behind a catalog card's version-count
+// badge, since the card view only shows a single "latest" summary.
+func apiCatalogVersions(ctx *fasthttp.RequestCtx, guid string) {
+	rows, err := db.DB.Query(`
+		SELECT v.id, v.version, COALESCE(v.target_abi,''), COALESCE(v.changelog,''),
+		       v.checksum, v.download_status, COALESCE(v.timestamp,''), r.name
+		FROM plugin_versions v
+		JOIN plugins p ON p.id = v.plugin_id
+		JOIN repos r ON r.id = p.repo_id
+		WHERE p.guid = ? AND r.enabled = 1
+	`, guid)
+	if err != nil {
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	type versionEntry struct {
+		ID        string `json:"id"`
+		Version   string `json:"version"`
+		TargetABI string `json:"target_abi"`
+		ChangeLog string `json:"changelog,omitempty"`
+		Checksum  string `json:"checksum"`
+		Status    string `json:"status"`
+		Timestamp string `json:"timestamp"`
+		RepoName  string `json:"repo_name"`
+	}
+	entries := []versionEntry{}
+	for rows.Next() {
+		var e versionEntry
+		if err := rows.Scan(&e.ID, &e.Version, &e.TargetABI, &e.ChangeLog,
+			&e.Checksum, &e.Status, &e.Timestamp, &e.RepoName); err != nil {
+			continue
+		}
+		entries = append(entries, e)
+	}
+
+	sort.SliceStable(entries, func(i, j int) bool {
+		if c := manifest.CompareVersionStrings(entries[i].Version, entries[j].Version); c != 0 {
+			return c > 0
+		}
+		return entries[i].Timestamp > entries[j].Timestamp
+	})
+
+	writeJSON(ctx, fasthttp.StatusOK, entries)
+}
+
 func apiCatalogDownload(ctx *fasthttp.RequestCtx, guid string) {
-	var versionID, checksum, sourceURL string
-	err := db.DB.QueryRow(`
-		SELECT pv.id, pv.checksum, pv.source_url
+	rows, err := db.DB.Query(`
+		SELECT pv.id, pv.version, pv.checksum, pv.source_url
 		FROM plugin_versions pv
 		JOIN plugins p ON p.id=pv.plugin_id
 		JOIN repos r ON r.id=p.repo_id
 		WHERE p.guid=? AND r.enabled=1
-		ORDER BY r.priority DESC, pv.timestamp DESC LIMIT 1
-	`, guid).Scan(&versionID, &checksum, &sourceURL)
+	`, guid)
 	if err != nil {
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	// Pick the numerically newest version across every contributing repo —
+	// same rule apiCatalog uses to decide "latest" — not just the
+	// highest-priority repo's own newest-by-timestamp row, so the download
+	// button can't silently fetch a different version than the card shows.
+	var versionID, bestVersion, checksum, sourceURL string
+	for rows.Next() {
+		var id, ver, sum, src string
+		if err := rows.Scan(&id, &ver, &sum, &src); err != nil {
+			continue
+		}
+		if bestVersion == "" || manifest.CompareVersionStrings(ver, bestVersion) > 0 {
+			versionID, bestVersion, checksum, sourceURL = id, ver, sum, src
+		}
+	}
+	rows.Close()
+	if versionID == "" {
 		writeJSON(ctx, fasthttp.StatusNotFound, map[string]string{"error": "plugin not found"})
 		return
 	}
