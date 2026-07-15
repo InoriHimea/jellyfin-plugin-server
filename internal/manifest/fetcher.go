@@ -234,6 +234,7 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 	catalog := make(Catalog, 0, len(order))
 	for _, g := range order {
 		sortVersionsDesc(pluginMap[g].Versions)
+		tagAmbiguousChangelogs(pluginMap[g].Versions)
 		catalog = append(catalog, *pluginMap[g])
 	}
 	return catalog, nil
@@ -329,6 +330,7 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 	catalog := make(Catalog, 0, len(order))
 	for _, g := range order {
 		sortVersionsDesc(seen[g].p.Versions)
+		tagAmbiguousChangelogs(seen[g].p.Versions)
 		catalog = append(catalog, *seen[g].p)
 	}
 
@@ -376,6 +378,26 @@ func compareVersionStrings(a, b string) int {
 		}
 	}
 	return 0
+}
+
+// tagAmbiguousChangelogs prefixes the changelog with "[ABI x.y.z.w] " for
+// any version number that appears more than once in the list (i.e. the same
+// version published as separate builds for different Jellyfin ABI targets,
+// like trakt-ex's 10.10/10.11 compat pairs). Jellyfin's own plugin-history
+// UI shows only the version number and changelog text — not targetAbi — so
+// two entries with an identical version and changelog are otherwise
+// indistinguishable to whoever is deciding which one to install. Versions
+// that are the only entry for their version number are left untouched.
+func tagAmbiguousChangelogs(versions []Version) {
+	counts := make(map[string]int, len(versions))
+	for _, v := range versions {
+		counts[v.Version]++
+	}
+	for i, v := range versions {
+		if counts[v.Version] > 1 && v.TargetABI != "" {
+			versions[i].ChangeLog = fmt.Sprintf("[ABI %s] %s", v.TargetABI, v.ChangeLog)
+		}
+	}
 }
 
 // localURL builds the URL our server uses to serve (or proxy) a plugin file.
