@@ -409,8 +409,17 @@ func apiTestRepo(ctx *fasthttp.RequestCtx, id string) {
 func apiLogs(ctx *fasthttp.RequestCtx) {
 	search := string(ctx.QueryArgs().Peek("q"))
 	logType := string(ctx.QueryArgs().Peek("type"))
+	level := string(ctx.QueryArgs().Peek("level"))
 
-	query := `SELECT id, type, level, message, COALESCE(detail,''), created_at FROM logs`
+	limit := ctx.QueryArgs().GetUintOrZero("limit")
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 300 {
+		limit = 300
+	}
+	offset := ctx.QueryArgs().GetUintOrZero("offset")
+
 	var conditions []string
 	args := []any{}
 	if search != "" {
@@ -422,12 +431,28 @@ func apiLogs(ctx *fasthttp.RequestCtx) {
 		conditions = append(conditions, `type = ?`)
 		args = append(args, logType)
 	}
-	if len(conditions) > 0 {
-		query += ` WHERE ` + strings.Join(conditions, " AND ")
+	if level != "" {
+		conditions = append(conditions, `level = ?`)
+		args = append(args, level)
 	}
-	query += ` ORDER BY id DESC LIMIT 300`
+	where := ""
+	if len(conditions) > 0 {
+		where = ` WHERE ` + strings.Join(conditions, " AND ")
+	}
 
-	rows, err := db.DB.Query(query, args...)
+	// Total under the same filter, so the UI can render a real pager
+	// instead of an unpageable most-recent-300 window.
+	var total int64
+	if err := db.DB.QueryRow(`SELECT COUNT(*) FROM logs`+where, args...).Scan(&total); err != nil {
+		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	rows, err := db.DB.Query(
+		`SELECT id, type, level, message, COALESCE(detail,''), created_at FROM logs`+
+			where+` ORDER BY id DESC LIMIT ? OFFSET ?`,
+		append(append([]any{}, args...), limit, offset)...,
+	)
 	if err != nil {
 		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -442,7 +467,7 @@ func apiLogs(ctx *fasthttp.RequestCtx) {
 		Detail    string `json:"detail,omitempty"`
 		CreatedAt string `json:"created_at"`
 	}
-	var entries []logEntry
+	entries := []logEntry{}
 	for rows.Next() {
 		var e logEntry
 		if err := rows.Scan(&e.ID, &e.Type, &e.Level, &e.Message, &e.Detail, &e.CreatedAt); err != nil {
@@ -450,7 +475,7 @@ func apiLogs(ctx *fasthttp.RequestCtx) {
 		}
 		entries = append(entries, e)
 	}
-	writeJSON(ctx, fasthttp.StatusOK, entries)
+	writeJSON(ctx, fasthttp.StatusOK, map[string]any{"total": total, "entries": entries})
 }
 
 func writeJSON(ctx *fasthttp.RequestCtx, code int, v any) {

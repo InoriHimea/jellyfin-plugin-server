@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -13,9 +13,20 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { toast } from 'sonner'
-import { Plus, RefreshCw, Trash2, Wifi, WifiOff, Pencil, Sparkles } from 'lucide-react'
+import {
+  ChevronLeft, ChevronRight, Database, Plus, RefreshCw, Search,
+  Trash2, Wifi, WifiOff, Pencil, Sparkles,
+} from 'lucide-react'
 
 const emptyForm = { name: '', url: '', priority: 50, enabled: true }
+
+const PAGE_SIZE = 20
+
+const STATUS_FILTERS: { value: '' | 'enabled' | 'disabled'; label: string }[] = [
+  { value: '', label: '全部' },
+  { value: 'enabled', label: '启用' },
+  { value: 'disabled', label: '禁用' },
+]
 
 export function Repos() {
   const [repos, setRepos] = useState<Repo[]>([])
@@ -26,6 +37,9 @@ export function Repos() {
   const [editing, setEditing] = useState<Repo | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [q, setQ] = useState('')
+  const [status, setStatus] = useState<'' | 'enabled' | 'disabled'>('')
+  const [page, setPage] = useState(0)
 
   const load = () => {
     api.repos.list().then(setRepos).finally(() => setLoading(false))
@@ -61,9 +75,13 @@ export function Repos() {
 
   const del = async (r: Repo) => {
     if (!confirm(`确认删除「${r.name}」？`)) return
-    await api.repos.delete(r.id).catch((e: unknown) => toast.error((e as Error).message))
-    toast.success('已删除')
-    load()
+    try {
+      await api.repos.delete(r.id)
+      toast.success('已删除')
+      load()
+    } catch (e: unknown) {
+      toast.error((e as Error).message)
+    }
   }
 
   const refresh = async (r: Repo) => {
@@ -103,6 +121,17 @@ export function Repos() {
     }
   }
 
+  const filtered = repos.filter(r => {
+    const matchStatus =
+      status === '' || (status === 'enabled' ? r.enabled : !r.enabled)
+    const s = q.toLowerCase()
+    const matchQ = !s || r.name.toLowerCase().includes(s) || r.url.toLowerCase().includes(s)
+    return matchStatus && matchQ
+  })
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const visible = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -120,10 +149,47 @@ export function Repos() {
         </div>
       </div>
 
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            placeholder="搜索名称 / URL…"
+            value={q}
+            onChange={e => { setQ(e.target.value); setPage(0) }}
+          />
+        </div>
+        <div className="flex gap-1.5 flex-wrap">
+          {STATUS_FILTERS.map(f => (
+            <button
+              key={f.value}
+              onClick={() => { setStatus(f.value); setPage(0) }}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${
+                status === f.value
+                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                  : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        {!loading && (
+          <span className="text-xs text-muted-foreground sm:ml-auto tabular-nums">
+            {filtered.length} / {repos.length} 个仓库
+          </span>
+        )}
+      </div>
+
       <Card>
         <CardContent className="p-0">
           {loading ? (
             <div className="p-8 text-center text-muted-foreground">加载中…</div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+              <Database className="h-12 w-12 opacity-30" />
+              <p className="text-sm">{q || status ? '没有匹配的仓库' : '暂无仓库，点击右上角添加'}</p>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -137,10 +203,10 @@ export function Repos() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {repos.map((r) => (
+                {visible.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell className="font-medium">{r.name}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-xs truncate">{r.url}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-xs truncate" title={r.url}>{r.url}</TableCell>
                     <TableCell>{r.priority}</TableCell>
                     <TableCell>
                       <Badge className={r.enabled ? 'bg-green-500 text-white hover:bg-green-600' : ''} variant={r.enabled ? 'default' : 'secondary'}>
@@ -173,6 +239,35 @@ export function Repos() {
           )}
         </CardContent>
       </Card>
+
+      {/* Pager */}
+      {!loading && filtered.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span className="tabular-nums">
+            第 {safePage + 1} / {pageCount} 页
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={safePage === 0}
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              上一页
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={safePage + 1 >= pageCount}
+              onClick={() => setPage(p => p + 1)}
+            >
+              下一页
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Dialog open={dlgOpen} onOpenChange={setDlgOpen}>
         <DialogContent>

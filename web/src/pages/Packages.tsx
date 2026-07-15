@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { api, type Package, type CleanResult, type DownloadsStatus } from '@/lib/api'
+import { useDebounce } from '@/hooks/use-debounce'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -62,7 +63,10 @@ function groupPackages(packages: Package[]): PluginGroup[] {
 
 export function Packages() {
   const [packages, setPackages]   = useState<Package[]>([])
-  const [q, setQ]                 = useState('')
+  const [qInput, setQInput]       = useState('')
+  // Server-side search — debounced so each keystroke doesn't fire a query
+  // over the full 2000+-row catalog.
+  const q = useDebounce(qInput)
   const [loading, setLoading]     = useState(true)
   const [expanded, setExpanded]   = useState<Set<string>>(new Set())
   const [page, setPage]           = useState(1)
@@ -304,8 +308,8 @@ export function Packages() {
         <Input
           className="pl-8"
           placeholder="搜索插件名…"
-          value={q}
-          onChange={e => setQ(e.target.value)}
+          value={qInput}
+          onChange={e => setQInput(e.target.value)}
         />
       </div>
 

@@ -31,6 +31,11 @@ export interface LogEntry {
   created_at: string
 }
 
+export interface LogsResponse {
+  total: number
+  entries: LogEntry[]
+}
+
 export interface Status {
   status: string
   version: string
@@ -161,12 +166,15 @@ export const api = {
   },
 
   logs: {
-    list: (q?: string, type?: string) => {
+    list: (opts: { q?: string; type?: string; level?: string; offset?: number; limit?: number } = {}) => {
       const params = new URLSearchParams()
-      if (q) params.set('q', q)
-      if (type) params.set('type', type)
+      if (opts.q) params.set('q', opts.q)
+      if (opts.type) params.set('type', opts.type)
+      if (opts.level) params.set('level', opts.level)
+      if (opts.offset) params.set('offset', String(opts.offset))
+      if (opts.limit) params.set('limit', String(opts.limit))
       const qs = params.toString()
-      return req<LogEntry[]>('/api/logs' + (qs ? '?' + qs : ''))
+      return req<LogsResponse>('/api/logs' + (qs ? '?' + qs : ''))
     },
   },
 
