@@ -28,11 +28,12 @@ const catColor = (cat: string) =>
   CAT_COLOR[cat] ?? 'bg-muted text-muted-foreground'
 
 const STATUS_CFG = {
-  done:        { label: '已下载', icon: CheckCircle2, cls: 'text-mint' },
-  downloading: { label: '下载中', icon: Loader2,      cls: 'text-lavender animate-spin' },
-  pending:     { label: '待下载', icon: Clock,         cls: 'text-muted-foreground' },
-  failed:      { label: '失败',   icon: AlertCircle,   cls: 'text-destructive' },
-  '':          { label: '—',      icon: Clock,         cls: 'text-muted-foreground/50' },
+  done:             { label: '已下载',   icon: CheckCircle2, cls: 'text-mint' },
+  downloading:      { label: '下载中',   icon: Loader2,      cls: 'text-lavender animate-spin' },
+  pending:          { label: '待下载',   icon: Clock,         cls: 'text-muted-foreground' },
+  failed:           { label: '失败',     icon: AlertCircle,   cls: 'text-destructive' },
+  failed_permanent: { label: '永久失败', icon: AlertCircle,   cls: 'text-muted-foreground/60' },
+  '':               { label: '—',        icon: Clock,         cls: 'text-muted-foreground/50' },
 } as const
 
 type StatusKey = keyof typeof STATUS_CFG
@@ -270,7 +271,7 @@ export function Catalog() {
 
       {/* Detail dialog */}
       <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           {detail && (
             <>
               <DialogHeader>
@@ -310,14 +311,17 @@ export function Catalog() {
                         const vStatus = STATUS_CFG[(v.status || '') as StatusKey] ?? STATUS_CFG['']
                         const VIcon = vStatus.icon
                         return (
-                          <div key={v.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                          <div key={v.id} className="flex items-center gap-2 px-3 py-2 text-xs min-w-0">
                             <span className="font-mono font-medium shrink-0">v{v.version}</span>
                             {v.target_abi && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground shrink-0">
                                 ABI {v.target_abi}
                               </span>
                             )}
-                            <span className="text-muted-foreground truncate flex-1" title={v.changelog}>
+                            {/* min-w-0 overrides the flex-item default (min-width:auto), which is
+                                what actually lets `truncate` clip instead of forcing the row (and
+                                the whole dialog) wider than the container. */}
+                            <span className="text-muted-foreground truncate min-w-0 flex-1" title={v.changelog}>
                               {v.changelog || v.repo_name}
                             </span>
                             <VIcon className={`h-3.5 w-3.5 shrink-0 ${vStatus.cls}`} />

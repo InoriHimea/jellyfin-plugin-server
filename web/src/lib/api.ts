@@ -9,13 +9,19 @@ export interface Repo {
   created_at: string
 }
 
+// failed_permanent: checksum mismatch or a 4xx response — the upstream
+// manifest itself is wrong (deleted release, renamed asset, bad declared
+// hash), so retrying just re-fetches the same broken thing. Excluded from
+// auto-retry; only resets to pending if the upstream checksum changes.
+export type DownloadStatus = 'pending' | 'downloading' | 'done' | 'failed' | 'failed_permanent'
+
 export interface Package {
   id: string
   name: string
   owner: string
   version: string
   checksum: string
-  status: 'pending' | 'downloading' | 'done' | 'failed'
+  status: DownloadStatus
   local_path?: string
   source_url: string
   downloaded_at?: string
@@ -55,7 +61,7 @@ export interface CatalogEntry {
   image_url?: string
   version_id: string
   latest_version: string
-  latest_status: 'pending' | 'downloading' | 'done' | 'failed' | ''
+  latest_status: DownloadStatus | ''
   version_count: number
 }
 
@@ -65,7 +71,7 @@ export interface CatalogVersionEntry {
   target_abi: string
   changelog?: string
   checksum: string
-  status: 'pending' | 'downloading' | 'done' | 'failed' | ''
+  status: DownloadStatus | ''
   timestamp: string
   repo_name: string
 }
@@ -91,7 +97,7 @@ export interface ActiveDownload {
 }
 
 export interface DownloadsStatus {
-  summary: { pending: number; downloading: number; done: number; failed: number; total: number }
+  summary: { pending: number; downloading: number; done: number; failed: number; failed_permanent: number; total: number }
   active: ActiveDownload[]
 }
 

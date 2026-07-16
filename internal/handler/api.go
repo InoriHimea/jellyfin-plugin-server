@@ -177,7 +177,7 @@ func apiListPackages(ctx *fasthttp.RequestCtx) {
 // apiDownloadsStatus returns aggregate download counters plus per-file
 // progress snapshots for everything currently in flight.
 func apiDownloadsStatus(ctx *fasthttp.RequestCtx) {
-	summary := map[string]int{"pending": 0, "downloading": 0, "done": 0, "failed": 0, "total": 0}
+	summary := map[string]int{"pending": 0, "downloading": 0, "done": 0, "failed": 0, "failed_permanent": 0, "total": 0}
 	rows, err := db.DB.Query(
 		`SELECT download_status, COUNT(*) FROM plugin_versions GROUP BY download_status`,
 	)
@@ -681,8 +681,10 @@ func apiCatalogDownload(ctx *fasthttp.RequestCtx, guid string) {
 		writeJSON(ctx, fasthttp.StatusNotFound, map[string]string{"error": "plugin not found"})
 		return
 	}
-	// Reset failed so it can be retried
-	db.DB.Exec(`UPDATE plugin_versions SET download_status='pending' WHERE id=? AND download_status='failed'`, versionID)
+	// Reset failed so it can be retried — including failed_permanent, since a
+	// click here is a targeted, intentional retry of this one plugin, not
+	// the bulk auto-retry that skips permanent failures to avoid churn.
+	db.DB.Exec(`UPDATE plugin_versions SET download_status='pending' WHERE id=? AND download_status IN ('failed','failed_permanent')`, versionID)
 	idx := strings.LastIndex(sourceURL, "/")
 	filename := checksum + ".zip"
 	if idx >= 0 && idx < len(sourceURL)-1 {

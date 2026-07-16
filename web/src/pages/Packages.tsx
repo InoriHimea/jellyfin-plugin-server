@@ -16,10 +16,10 @@ import {
 const PAGE = 20
 
 const STATUS_COLOR: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  done: 'default', downloading: 'secondary', pending: 'outline', failed: 'destructive',
+  done: 'default', downloading: 'secondary', pending: 'outline', failed: 'destructive', failed_permanent: 'outline',
 }
 const STATUS_LABEL: Record<string, string> = {
-  done: '已完成', downloading: '下载中', pending: '待下载', failed: '失败',
+  done: '已完成', downloading: '下载中', pending: '待下载', failed: '失败', failed_permanent: '永久失败',
 }
 
 function fmtBytes(b: number) {
@@ -253,6 +253,13 @@ export function Packages() {
                 <span className="font-medium tabular-nums">{sum.failed}</span>
                 <span className="text-muted-foreground">失败</span>
               </span>
+              {sum.failed_permanent > 0 && (
+                <span className="flex items-center gap-1.5" title="上游校验和不匹配或文件已不存在，重试无法解决，不会自动重试">
+                  <XCircle className="h-4 w-4 text-muted-foreground/60" />
+                  <span className="font-medium tabular-nums text-muted-foreground">{sum.failed_permanent}</span>
+                  <span className="text-muted-foreground">永久失败</span>
+                </span>
+              )}
             </div>
             <span className="text-sm font-medium tabular-nums">{cachePct}%</span>
           </div>
@@ -406,7 +413,7 @@ export function Packages() {
                                     <Badge variant={STATUS_COLOR[p.status] ?? 'outline'} className="text-[10px] h-5 w-fit">
                                       {STATUS_LABEL[p.status] ?? p.status}
                                     </Badge>
-                                    {p.status === 'failed' && p.fail_reason && (
+                                    {(p.status === 'failed' || p.status === 'failed_permanent') && p.fail_reason && (
                                       <span
                                         className="text-[10px] text-destructive/80 max-w-[260px] truncate"
                                         title={p.fail_reason}

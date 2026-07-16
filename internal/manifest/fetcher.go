@@ -135,10 +135,11 @@ func persistCatalog(repoID string, catalog Catalog) error {
 			// Matching on version alone collapses those into one row and silently
 			// discards the rest.
 			versionID := ""
+			var existingChecksum, existingStatus string
 			_ = tx.QueryRow(
-				`SELECT id FROM plugin_versions WHERE plugin_id=? AND version=? AND target_abi=?`,
+				`SELECT id, checksum, download_status FROM plugin_versions WHERE plugin_id=? AND version=? AND target_abi=?`,
 				pluginID, v.Version, v.TargetABI,
-			).Scan(&versionID)
+			).Scan(&versionID, &existingChecksum, &existingStatus)
 
 			if versionID == "" {
 				versionID = uuid.NewString()
@@ -147,6 +148,15 @@ func persistCatalog(repoID string, catalog Catalog) error {
 					 (id, plugin_id, version, changelog, target_abi, source_url, checksum, timestamp, download_status)
 					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
 					versionID, pluginID, v.Version, v.ChangeLog, v.TargetABI, v.SourceURL, v.Checksum, v.Timestamp,
+				)
+			} else if existingStatus == "failed_permanent" && existingChecksum != v.Checksum {
+				// Upstream published a different file under the same
+				// version/ABI (fixed a bad checksum, restored a deleted
+				// release) — give it a fresh attempt instead of leaving it
+				// stuck on the old permanent-failure verdict forever.
+				_, err = tx.Exec(
+					`UPDATE plugin_versions SET source_url=?, checksum=?, changelog=?, download_status='pending', fail_reason='' WHERE id=?`,
+					v.SourceURL, v.Checksum, v.ChangeLog, versionID,
 				)
 			} else {
 				// update source URL if it changed

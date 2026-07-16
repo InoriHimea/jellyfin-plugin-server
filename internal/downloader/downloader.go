@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -195,10 +196,36 @@ func markFailed(versionID, reason string) {
 	if len(reason) > 300 {
 		reason = reason[:300]
 	}
+	status := "failed"
+	if isPermanentFailure(reason) {
+		// Checksum mismatches and 4xx responses mean the upstream manifest
+		// itself is stale (deleted release, renamed asset, wrong declared
+		// hash) — retrying downloads the same broken thing again forever.
+		// Excluded from EnqueueAllPending/apiRetryFailed by using a distinct
+		// status; persistCatalog resets it to 'pending' if the upstream
+		// checksum actually changes, so a real fix upstream still recovers.
+		status = "failed_permanent"
+	}
 	db.DB.Exec(
-		`UPDATE plugin_versions SET download_status='failed', fail_reason=? WHERE id=?`, reason, versionID,
+		`UPDATE plugin_versions SET download_status=?, fail_reason=? WHERE id=?`, status, reason, versionID,
 	)
-	logger.Warn("download failed", map[string]any{"version_id": versionID, "reason": reason})
+	logger.Warn("download failed", map[string]any{"version_id": versionID, "reason": reason, "permanent": status == "failed_permanent"})
+}
+
+// isPermanentFailure reports whether a failure reason indicates the
+// upstream data itself is wrong (bad checksum, or a 4xx meaning the file
+// genuinely isn't there) rather than a transient network/server problem
+// worth auto-retrying on the next refresh cycle.
+func isPermanentFailure(reason string) bool {
+	if strings.HasPrefix(reason, "checksum mismatch") {
+		return true
+	}
+	if rest, ok := strings.CutPrefix(reason, "upstream "); ok {
+		if code, err := strconv.Atoi(rest); err == nil {
+			return code >= 400 && code < 500
+		}
+	}
+	return false
 }
 
 // RecoverStuckDownloads resets any version left in 'downloading' back to

@@ -49,6 +49,13 @@ func Open(path string) error {
 	db.Exec(`UPDATE repos SET name='Jellyfin Official Unstable'
 	         WHERE url='https://repo.jellyfin.org/master/plugin-unstable/manifest.json'
 	           AND name != 'Jellyfin Official Unstable'`)
+	// One-time backfill: reclassify already-failed rows that match the new
+	// "permanent" criteria (checksum mismatch, 4xx) so they stop being
+	// auto-retried immediately instead of wasting one more retry cycle
+	// before markFailed would naturally reclassify them anyway.
+	db.Exec(`UPDATE plugin_versions SET download_status='failed_permanent'
+	         WHERE download_status='failed'
+	           AND (fail_reason LIKE 'checksum mismatch%' OR fail_reason LIKE 'upstream 4__')`)
 
 	if err := migrateVersionAbiUnique(db); err != nil {
 		return fmt.Errorf("migrate plugin_versions unique key: %w", err)
