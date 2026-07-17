@@ -271,7 +271,19 @@ export function Catalog() {
 
       {/* Detail dialog */}
       <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        {/*
+          grid-cols-[minmax(0,1fr)]: the base DialogContent is `display:grid`
+          with no grid-template-columns, so its implicit column defaults to
+          `auto` sizing — which grows to fit the widest descendant's
+          max-content (text-overflow:ellipsis does NOT reduce max-content
+          for a white-space:nowrap element, only how it renders once a
+          width is already fixed). Without an explicit track, min-w-0 on
+          the version rows has nothing definite to shrink into, so
+          truncate silently fails and the dialog's real layout width blows
+          out past 5000px, pushing the footer buttons off-screen. minmax(0,1fr)
+          gives the track a definite (zero-minimum) basis to resolve against.
+        */}
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto grid-cols-[minmax(0,1fr)]">
           {detail && (
             <>
               <DialogHeader>
