@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/inorihimea/jellyfin-plugin-server/internal/config"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/db"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/logger"
 	proxyClient "github.com/inorihimea/jellyfin-plugin-server/internal/proxy"
@@ -27,6 +28,14 @@ var (
 type unifiedEntry struct {
 	catalog   Catalog
 	expiresAt time.Time
+}
+
+// InvalidateUnifiedCache drops the in-memory unified-manifest cache so the
+// next /manifest request rebuilds from the DB — call after anything that
+// changes what BuildUnifiedManifest computes but isn't a manifest fetch
+// itself, e.g. compat.jellyfin_version changing which versions get filtered.
+func InvalidateUnifiedCache() {
+	invalidateUnifiedCache()
 }
 
 func invalidateUnifiedCache() {
@@ -241,11 +250,17 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 		})
 	}
 
+	targetVersion := config.Get().Compat.JellyfinVersion
 	catalog := make(Catalog, 0, len(order))
 	for _, g := range order {
-		sortVersionsDesc(pluginMap[g].Versions)
-		tagAmbiguousChangelogs(pluginMap[g].Versions)
-		catalog = append(catalog, *pluginMap[g])
+		p := pluginMap[g]
+		sortVersionsDesc(p.Versions)
+		tagAmbiguousChangelogs(p.Versions)
+		p.Versions = filterIncompatibleVersions(p.Versions, targetVersion)
+		if len(p.Versions) == 0 {
+			continue // nothing installable for the configured Jellyfin version
+		}
+		catalog = append(catalog, *p)
 	}
 	return catalog, nil
 }
@@ -337,11 +352,17 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 		})
 	}
 
+	targetVersion := config.Get().Compat.JellyfinVersion
 	catalog := make(Catalog, 0, len(order))
 	for _, g := range order {
-		sortVersionsDesc(seen[g].p.Versions)
-		tagAmbiguousChangelogs(seen[g].p.Versions)
-		catalog = append(catalog, *seen[g].p)
+		p := seen[g].p
+		sortVersionsDesc(p.Versions)
+		tagAmbiguousChangelogs(p.Versions)
+		p.Versions = filterIncompatibleVersions(p.Versions, targetVersion)
+		if len(p.Versions) == 0 {
+			continue // nothing installable for the configured Jellyfin version
+		}
+		catalog = append(catalog, *p)
 	}
 
 	unifiedMu.Lock()
@@ -410,6 +431,26 @@ func tagAmbiguousChangelogs(versions []Version) {
 			versions[i].ChangeLog = fmt.Sprintf("[ABI %s] %s", v.TargetABI, v.ChangeLog)
 		}
 	}
+}
+
+// filterIncompatibleVersions drops versions whose targetAbi is newer than
+// compat.jellyfin_version — Jellyfin's catalog will list (and let you
+// install) any version whose targetAbi merely parses, but decides
+// "Not Supported" separately at plugin load time by comparing the running
+// server's actual version, so a version that fails that later check is
+// useless to offer. A no-op when the setting is unset (empty targetVersion),
+// preserving today's behavior for anyone who hasn't configured it.
+func filterIncompatibleVersions(versions []Version, targetVersion string) []Version {
+	if targetVersion == "" {
+		return versions
+	}
+	kept := versions[:0]
+	for _, v := range versions {
+		if v.TargetABI == "" || CompareVersionStrings(v.TargetABI, targetVersion) <= 0 {
+			kept = append(kept, v)
+		}
+	}
+	return kept
 }
 
 // localURL builds the URL our server uses to serve (or proxy) a plugin file.

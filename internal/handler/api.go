@@ -273,6 +273,7 @@ func apiPutConfig(ctx *fasthttp.RequestCtx) {
 		return
 	}
 	proxyClient.Reload()
+	manifest.InvalidateUnifiedCache() // compat.jellyfin_version may have changed which versions get filtered
 	writeJSON(ctx, fasthttp.StatusOK, map[string]string{"status": "ok"})
 }
 
