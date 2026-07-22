@@ -8,7 +8,7 @@ import {
 import { toast } from 'sonner'
 import {
   Download, Search, RefreshCw, CheckCircle2, Loader2, Clock,
-  AlertCircle, Package, Layers, Sparkles,
+  AlertCircle, AlertTriangle, Package, Layers, Sparkles,
 } from 'lucide-react'
 
 const PAGE = 24
@@ -225,6 +225,11 @@ export function Catalog() {
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <StatusIcon className={`h-3.5 w-3.5 ${status.cls}`} />
                     <span className="font-mono">{e.latest_version ? `v${e.latest_version}` : '—'}</span>
+                    {e.latest_version_compatible === false && (
+                      <span title="最新版本的 targetAbi 高于系统设置里配置的 Jellyfin 版本，安装后大概率显示 Not Supported">
+                        <AlertTriangle className="h-3 w-3 text-amber-500" />
+                      </span>
+                    )}
                     {e.version_count > 1 && (
                       <span className="flex items-center gap-0.5 opacity-50">
                         <Layers className="h-3 w-3" />
@@ -326,7 +331,15 @@ export function Catalog() {
                           <div key={v.id} className="flex items-center gap-2 px-3 py-2 text-xs min-w-0">
                             <span className="font-mono font-medium shrink-0">v{v.version}</span>
                             {v.target_abi && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-muted text-muted-foreground shrink-0">
+                              <span
+                                title={v.compatible === false ? '高于系统设置里配置的 Jellyfin 版本，安装后大概率 Not Supported' : undefined}
+                                className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
+                                  v.compatible === false
+                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                    : 'bg-muted text-muted-foreground'
+                                }`}
+                              >
+                                {v.compatible === false && <AlertTriangle className="h-2.5 w-2.5" />}
                                 ABI {v.target_abi}
                               </span>
                             )}

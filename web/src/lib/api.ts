@@ -63,12 +63,15 @@ export interface CatalogEntry {
   latest_version: string
   latest_status: DownloadStatus | ''
   version_count: number
+  // undefined when no compat.jellyfin_version is configured in settings
+  latest_version_compatible?: boolean
 }
 
 export interface CatalogVersionEntry {
   id: string
   version: string
   target_abi: string
+  compatible?: boolean
   changelog?: string
   checksum: string
   status: DownloadStatus | ''
@@ -107,6 +110,7 @@ export interface Config {
   cache: { manifest_ttl_seconds: number; max_concurrent_downloads: number }
   proxy: { type: string; address: string; username: string; password: string; no_proxy: string }
   auth: { enabled: boolean; username: string; password: string }
+  compat: { jellyfin_version: string }
   log_json: boolean
 }
 

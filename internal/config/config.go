@@ -49,12 +49,26 @@ type ServerConfig struct {
 	PublicURL string `json:"public_url"` // Override for manifest sourceUrl base (e.g. https://example.com:9443)
 }
 
+// CompatConfig records the Jellyfin server version this proxy's admin panel
+// should check plugin versions against. Jellyfin's catalog page lets you
+// install any listed version whose targetAbi merely parses, but the actual
+// "Not Supported" verdict is decided later at plugin load time by comparing
+// the running server's version against the plugin's targetAbi — a stricter,
+// separate check. We have no way to detect which Jellyfin instance(s) are
+// polling this server, so this is manually configured, purely to flag
+// mismatches in our own catalog/packages UI before the user installs
+// something that will fail to load.
+type CompatConfig struct {
+	JellyfinVersion string `json:"jellyfin_version"`
+}
+
 type Config struct {
 	Server  ServerConfig  `json:"server"`
 	Storage StorageConfig `json:"storage"`
 	Cache   CacheConfig   `json:"cache"`
 	Proxy   ProxyConfig   `json:"proxy"`
 	Auth    AuthConfig    `json:"auth"`
+	Compat  CompatConfig  `json:"compat"`
 	LogJSON bool          `json:"log_json"`
 }
 
@@ -82,6 +96,7 @@ func Defaults() *Config {
 		},
 		Proxy:   ProxyConfig{},
 		Auth:    AuthConfig{Enabled: false},
+		Compat:  CompatConfig{},
 		LogJSON: false,
 	}
 }

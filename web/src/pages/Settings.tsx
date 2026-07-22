@@ -99,6 +99,25 @@ export function Settings() {
         </CardContent>
       </Card>
 
+      {/* 兼容性 */}
+      <Card>
+        <CardHeader><CardTitle className="text-base">插件兼容性</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label>你的 Jellyfin 服务器版本</Label>
+            <Input
+              value={cfg.compat.jellyfin_version}
+              onChange={(e) => set('compat.jellyfin_version', e.target.value)}
+              placeholder="10.11.11"
+            />
+            <p className="text-xs text-muted-foreground">
+              填写后，插件目录会标注每个版本是否兼容——Jellyfin 允许安装任何 targetAbi 能解析的版本，
+              但实际加载时会用服务器自身版本比对 targetAbi，不满足就显示"Not Supported"。这个设置只影响本面板的标注，不影响送给 Jellyfin 的数据。留空则不显示标注。
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 存储 */}
       <Card>
         <CardHeader><CardTitle className="text-base">存储</CardTitle></CardHeader>
