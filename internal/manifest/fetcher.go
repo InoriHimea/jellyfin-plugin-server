@@ -256,9 +256,10 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 		p := pluginMap[g]
 		sortVersionsDesc(p.Versions)
 		tagAmbiguousChangelogs(p.Versions)
+		p.Versions = filterInvalidChecksums(p.Versions)
 		p.Versions = filterIncompatibleVersions(p.Versions, targetVersion)
 		if len(p.Versions) == 0 {
-			continue // nothing installable for the configured Jellyfin version
+			continue // nothing installable (or invalid checksum) for this plugin
 		}
 		catalog = append(catalog, *p)
 	}
@@ -358,9 +359,10 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 		p := seen[g].p
 		sortVersionsDesc(p.Versions)
 		tagAmbiguousChangelogs(p.Versions)
+		p.Versions = filterInvalidChecksums(p.Versions)
 		p.Versions = filterIncompatibleVersions(p.Versions, targetVersion)
 		if len(p.Versions) == 0 {
-			continue // nothing installable for the configured Jellyfin version
+			continue // nothing installable (or invalid checksum) for this plugin
 		}
 		catalog = append(catalog, *p)
 	}
@@ -451,6 +453,37 @@ func filterIncompatibleVersions(versions []Version, targetVersion string) []Vers
 		}
 	}
 	return kept
+}
+
+// filterInvalidChecksums drops versions whose checksum isn't a usable
+// 32-char hex MD5. localURL keys the download path on this value
+// (/plugins/packages/{checksum}/{filename}), so an empty one produces a
+// malformed double-slash URL and a 404, not a working — if unverified —
+// download. Seen in the wild from upstream manifests: blank for old
+// entries, and in one case the literal string "Not Found" (an upstream
+// fetch error that leaked into the checksum field). Nothing useful to
+// offer Jellyfin in either case.
+func filterInvalidChecksums(versions []Version) []Version {
+	kept := versions[:0]
+	for _, v := range versions {
+		if isValidChecksum(v.Checksum) {
+			kept = append(kept, v)
+		}
+	}
+	return kept
+}
+
+func isValidChecksum(s string) bool {
+	if len(s) != 32 {
+		return false
+	}
+	for _, c := range s {
+		isHex := (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+		if !isHex {
+			return false
+		}
+	}
+	return true
 }
 
 // localURL builds the URL our server uses to serve (or proxy) a plugin file.
