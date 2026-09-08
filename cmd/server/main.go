@@ -54,6 +54,7 @@ func main() {
 	manifest.SetEnqueueFunc(downloader.EnqueueAllPending)
 	manifest.SetImagePrewarmFunc(handler.PrewarmImages)
 	downloader.RecoverStuckDownloads() // must run before any EnqueueAllPending call
+	downloader.BackfillRuntimeCompat() // re-verify cached packages against the configured Jellyfin runtime
 	go downloader.EnqueueAllPending()
 	go scheduledCleanup()
 	go startupRefresh(cfg) // warm the DB on startup so /manifest is immediately populated

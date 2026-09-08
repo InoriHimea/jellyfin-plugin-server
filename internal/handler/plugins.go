@@ -85,9 +85,27 @@ func serveImage(ctx *fasthttp.RequestCtx, data []byte) {
 }
 
 // handleUnifiedManifest serves GET /manifest — all enabled repos merged and deduplicated by GUID.
+// GET /manifest/{version} (e.g. /manifest/10.11.8) serves the same catalog
+// filtered for that specific Jellyfin version instead of the configured or
+// auto-detected one — useful for checking what a given server would see.
 func handleUnifiedManifest(ctx *fasthttp.RequestCtx) {
 	baseURL := baseURLFromCtx(ctx)
-	catalog, err := manifest.BuildUnifiedManifest(baseURL)
+
+	manifest.DetectFromUserAgent(string(ctx.Request.Header.UserAgent()))
+
+	// Optional explicit version from the path: /manifest/{version}.
+	override := ""
+	if path := string(ctx.Path()); path != "/manifest" && path != "/manifest/" {
+		override = strings.Trim(strings.TrimPrefix(path, "/manifest"), "/")
+		if !isValidJellyfinVersion(override) {
+			writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{
+				"error": "invalid version, expected e.g. /manifest/10.11.8",
+			})
+			return
+		}
+	}
+
+	catalog, err := manifest.BuildUnifiedManifestForVersion(baseURL, override)
 	if err != nil {
 		logger.Error("build unified manifest failed", map[string]any{"err": err})
 		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "internal error"})
@@ -97,6 +115,30 @@ func handleUnifiedManifest(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("application/json")
 	ctx.SetStatusCode(fasthttp.StatusOK)
 	ctx.SetBody(b)
+}
+
+// isValidJellyfinVersion accepts the version shapes Jellyfin uses in the
+// wild: 10.11.8, 10.11.8.0, 10.11, with or without a leading v.
+func isValidJellyfinVersion(v string) bool {
+	if v == "" {
+		return false
+	}
+	s := strings.TrimPrefix(v, "v")
+	parts := strings.Split(s, ".")
+	if len(parts) < 2 || len(parts) > 4 {
+		return false
+	}
+	for _, p := range parts {
+		if p == "" {
+			return false
+		}
+		for _, c := range p {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func handleManifest(ctx *fasthttp.RequestCtx, repoID string) {

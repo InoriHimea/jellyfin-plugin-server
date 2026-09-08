@@ -41,6 +41,9 @@ func Open(path string) error {
 	// Migrations for existing databases — errors are ignored when column already exists.
 	db.Exec(`ALTER TABLE plugins ADD COLUMN image_url TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE plugin_versions ADD COLUMN fail_reason TEXT NOT NULL DEFAULT ''`)
+	// Highest .NET major version the package's assemblies were compiled
+	// against (0 = unscanned/unknown). Older databases get the column here.
+	db.Exec(`ALTER TABLE plugin_versions ADD COLUMN dotnet_major INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE logs ADD COLUMN type TEXT NOT NULL DEFAULT 'system'`)
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_logs_type ON logs(type)`)
 	// SeedDefaultRepos is INSERT OR IGNORE keyed on url, so renaming a

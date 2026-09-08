@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS plugin_versions (
 	download_status TEXT NOT NULL DEFAULT 'pending',
 	downloaded_at  TEXT,
 	fail_reason    TEXT NOT NULL DEFAULT '',
+	dotnet_major   INTEGER NOT NULL DEFAULT 0,
 	UNIQUE(plugin_id, version, target_abi)
 );
 

@@ -18,7 +18,7 @@ func Router(ctx *fasthttp.RequestCtx) {
 	switch {
 	case path == "/health":
 		Health(ctx); return
-	case path == "/manifest":
+	case path == "/manifest" || strings.HasPrefix(path, "/manifest/"):
 		handleUnifiedManifest(ctx); return
 	case strings.HasPrefix(path, "/plugins/"):
 		PluginRouter(ctx); return

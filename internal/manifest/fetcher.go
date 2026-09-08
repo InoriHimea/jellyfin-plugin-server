@@ -14,6 +14,7 @@ import (
 	"github.com/inorihimea/jellyfin-plugin-server/internal/db"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/logger"
 	proxyClient "github.com/inorihimea/jellyfin-plugin-server/internal/proxy"
+	"github.com/inorihimea/jellyfin-plugin-server/internal/pkgcheck"
 	"github.com/google/uuid"
 )
 
@@ -161,10 +162,12 @@ func persistCatalog(repoID string, catalog Catalog) error {
 			} else if existingStatus == "failed_permanent" && existingChecksum != v.Checksum {
 				// Upstream published a different file under the same
 				// version/ABI (fixed a bad checksum, restored a deleted
-				// release) — give it a fresh attempt instead of leaving it
-				// stuck on the old permanent-failure verdict forever.
+				// release, or re-shipped a runtime-compatible build) —
+				// give it a fresh attempt instead of leaving it stuck on
+				// the old permanent-failure verdict forever. Reset
+				// dotnet_major too: the new file needs a fresh scan.
 				_, err = tx.Exec(
-					`UPDATE plugin_versions SET source_url=?, checksum=?, changelog=?, download_status='pending', fail_reason='' WHERE id=?`,
+					`UPDATE plugin_versions SET source_url=?, checksum=?, changelog=?, download_status='pending', fail_reason='', dotnet_major=0 WHERE id=?`,
 					v.SourceURL, v.Checksum, v.ChangeLog, versionID,
 				)
 			} else {
@@ -202,7 +205,7 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 		        COALESCE(p.owner,''), COALESCE(p.category,''), COALESCE(p.image_url,''),
 		        v.version, COALESCE(v.changelog,''), COALESCE(v.target_abi,''),
 		        v.source_url, v.checksum, COALESCE(v.timestamp,''),
-		        COALESCE(v.local_path,''), v.download_status
+		        COALESCE(v.local_path,''), v.download_status, COALESCE(v.dotnet_major,0)
 		 FROM plugins p
 		 JOIN plugin_versions v ON v.plugin_id = p.id
 		 WHERE p.repo_id = ?
@@ -221,10 +224,11 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 			guid, name, desc, overview, owner, cat, imageURL string
 			ver, changelog, abi, srcURL, checksum, ts        string
 			localPath, dlStatus                              string
+			dotnetMajor                                      int
 		)
 		if err := rows.Scan(&guid, &name, &desc, &overview, &owner, &cat, &imageURL,
 			&ver, &changelog, &abi, &srcURL, &checksum, &ts,
-			&localPath, &dlStatus); err != nil {
+			&localPath, &dlStatus, &dotnetMajor); err != nil {
 			return nil, err
 		}
 
@@ -241,23 +245,25 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 		resolvedURL := localURL(baseURL, checksum, localPath, srcURL)
 
 		pluginMap[guid].Versions = append(pluginMap[guid].Versions, Version{
-			Version:   ver,
-			ChangeLog: changelog,
-			TargetABI: abi,
-			SourceURL: resolvedURL,
-			Checksum:  checksum,
-			Timestamp: ts,
+			Version:     ver,
+			ChangeLog:   changelog,
+			TargetABI:   abi,
+			SourceURL:   resolvedURL,
+			Checksum:    checksum,
+			Timestamp:   ts,
+			DotnetMajor: dotnetMajor,
 		})
 	}
 
 	targetVersion := config.Get().Compat.JellyfinVersion
+	dotnetCap := pkgcheck.MaxDotnetMajor(targetVersion)
 	catalog := make(Catalog, 0, len(order))
 	for _, g := range order {
 		p := pluginMap[g]
 		sortVersionsDesc(p.Versions)
 		tagAmbiguousChangelogs(p.Versions)
 		p.Versions = filterInvalidChecksums(p.Versions)
-		p.Versions = filterIncompatibleVersions(p.Versions, targetVersion)
+		p.Versions = filterIncompatibleVersions(p.Versions, targetVersion, dotnetCap)
 		if len(p.Versions) == 0 {
 			continue // nothing installable (or invalid checksum) for this plugin
 		}
@@ -270,10 +276,23 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 // Per-GUID: metadata from the highest-priority repo; per (GUID, version): highest-priority copy wins.
 // Results are cached in memory for unifiedTTL (60s) to avoid repeated DB scans.
 func BuildUnifiedManifest(baseURL string) (Catalog, error) {
+	return buildUnifiedManifest(baseURL, "")
+}
+
+// BuildUnifiedManifestForVersion is BuildUnifiedManifest with the
+// compatibility filters applied against an explicitly given Jellyfin
+// version instead of the configured one ("" = use config, same as
+// BuildUnifiedManifest). Backs the /manifest/{version} preview endpoint.
+// Not cached — it's a low-traffic diagnostic path.
+func BuildUnifiedManifestForVersion(baseURL, jellyfinVersion string) (Catalog, error) {
+	return buildUnifiedManifest(baseURL, jellyfinVersion)
+}
+
+func buildUnifiedManifest(baseURL, jellyfinVersionOverride string) (Catalog, error) {
 	unifiedMu.RLock()
 	entry, ok := unifiedEntries[baseURL]
 	unifiedMu.RUnlock()
-	if ok && time.Now().Before(entry.expiresAt) {
+	if ok && time.Now().Before(entry.expiresAt) && jellyfinVersionOverride == "" {
 		return entry.catalog, nil
 	}
 
@@ -282,7 +301,7 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 		        COALESCE(p.owner,''), COALESCE(p.category,''), COALESCE(p.image_url,''),
 		        v.version, COALESCE(v.changelog,''), COALESCE(v.target_abi,''),
 		        v.source_url, v.checksum, COALESCE(v.timestamp,''),
-		        COALESCE(v.local_path,''), v.download_status
+		        COALESCE(v.local_path,''), v.download_status, COALESCE(v.dotnet_major,0)
 		 FROM plugins p
 		 JOIN plugin_versions v ON v.plugin_id = p.id
 		 JOIN repos r ON r.id = p.repo_id
@@ -306,10 +325,11 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 			guid, name, desc, overview, owner, cat, imageURL string
 			ver, changelog, abi, srcURL, checksum, ts        string
 			localPath, dlStatus                              string
+			dotnetMajor                                      int
 		)
 		if err := rows.Scan(&guid, &name, &desc, &overview, &owner, &cat, &imageURL,
 			&ver, &changelog, &abi, &srcURL, &checksum, &ts,
-			&localPath, &dlStatus); err != nil {
+			&localPath, &dlStatus, &dotnetMajor); err != nil {
 			return nil, err
 		}
 
@@ -344,32 +364,39 @@ func BuildUnifiedManifest(baseURL string) (Catalog, error) {
 		resolvedURL := localURL(baseURL, checksum, localPath, srcURL)
 
 		e.p.Versions = append(e.p.Versions, Version{
-			Version:   ver,
-			ChangeLog: changelog,
-			TargetABI: abi,
-			SourceURL: resolvedURL,
-			Checksum:  checksum,
-			Timestamp: ts,
+			Version:     ver,
+			ChangeLog:   changelog,
+			TargetABI:   abi,
+			SourceURL:   resolvedURL,
+			Checksum:    checksum,
+			Timestamp:   ts,
+			DotnetMajor: dotnetMajor,
 		})
 	}
 
 	targetVersion := config.Get().Compat.JellyfinVersion
+	if jellyfinVersionOverride != "" {
+		targetVersion = jellyfinVersionOverride
+	}
+	dotnetCap := pkgcheck.MaxDotnetMajor(targetVersion)
 	catalog := make(Catalog, 0, len(order))
 	for _, g := range order {
 		p := seen[g].p
 		sortVersionsDesc(p.Versions)
 		tagAmbiguousChangelogs(p.Versions)
 		p.Versions = filterInvalidChecksums(p.Versions)
-		p.Versions = filterIncompatibleVersions(p.Versions, targetVersion)
+		p.Versions = filterIncompatibleVersions(p.Versions, targetVersion, dotnetCap)
 		if len(p.Versions) == 0 {
 			continue // nothing installable (or invalid checksum) for this plugin
 		}
 		catalog = append(catalog, *p)
 	}
 
-	unifiedMu.Lock()
-	unifiedEntries[baseURL] = unifiedEntry{catalog: catalog, expiresAt: time.Now().Add(unifiedTTL)}
-	unifiedMu.Unlock()
+	if jellyfinVersionOverride == "" {
+		unifiedMu.Lock()
+		unifiedEntries[baseURL] = unifiedEntry{catalog: catalog, expiresAt: time.Now().Add(unifiedTTL)}
+		unifiedMu.Unlock()
+	}
 
 	return catalog, nil
 }
@@ -440,16 +467,26 @@ func tagAmbiguousChangelogs(versions []Version) {
 // install) any version whose targetAbi merely parses, but decides
 // "Not Supported" separately at plugin load time by comparing the running
 // server's actual version, so a version that fails that later check is
-// useless to offer. A no-op when the setting is unset (empty targetVersion),
+// useless to offer.
+//
+// dotnetMajorCap is the highest .NET major the target Jellyfin runtime can
+// load (0 = unknown/unfiltered). Versions whose package was scanned and
+// needs a newer .NET are dropped the same way — targetAbi can't catch
+// those, because a mirror may ship a same-version zip compiled against a
+// newer runtime than the official build.
+//
+// A no-op when the setting is unset (empty targetVersion),
 // preserving today's behavior for anyone who hasn't configured it.
-func filterIncompatibleVersions(versions []Version, targetVersion string) []Version {
+func filterIncompatibleVersions(versions []Version, targetVersion string, dotnetMajorCap int) []Version {
 	if targetVersion == "" {
 		return versions
 	}
 	kept := versions[:0]
 	for _, v := range versions {
 		if v.TargetABI == "" || CompareVersionStrings(v.TargetABI, targetVersion) <= 0 {
-			kept = append(kept, v)
+			if v.DotnetMajor == 0 || dotnetMajorCap == 0 || v.DotnetMajor <= dotnetMajorCap {
+				kept = append(kept, v)
+			}
 		}
 	}
 	return kept

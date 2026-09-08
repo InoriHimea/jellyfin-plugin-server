@@ -21,4 +21,7 @@ type Version struct {
 	SourceURL string `json:"sourceUrl"`
 	Checksum  string `json:"checksum"`
 	Timestamp string `json:"timestamp"`
+	// Highest .NET major the package's assemblies were compiled against
+	// (0 = unscanned). Internal only, never serialized to clients.
+	DotnetMajor int    `json:"-"`
 }
