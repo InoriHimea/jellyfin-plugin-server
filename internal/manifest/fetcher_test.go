@@ -1,6 +1,43 @@
 package manifest
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestLocalURLCarriesCompatibilityContext(t *testing.T) {
+	got := localURL("https://plugins.example/", "abc", "", "https://upstream.example/Trakt.zip?token=x", "12.0.0")
+	want := "https://plugins.example/plugins/packages/abc/Trakt.zip?jv=12.0.0"
+	if got != want {
+		t.Fatalf("localURL() = %q, want %q", got, want)
+	}
+	if strings.Contains(localURL("https://plugins.example", "abc", "", "https://upstream.example/Trakt.zip", ""), "?jv=") {
+		t.Error("empty compatibility version must not add jv")
+	}
+}
+
+func TestIsVersionCompatible(t *testing.T) {
+	tests := []struct {
+		name          string
+		abi           string
+		dotnetMajor   int
+		targetVersion string
+		want          bool
+	}{
+		{"Jellyfin 12 accepts ABI 12 .NET 10", "12.0.0", 10, "12.0.0", true},
+		{"Jellyfin 12 rejects ABI 13", "13.0.0", 10, "12.0.0", false},
+		{"Jellyfin 10.11 rejects ABI 12", "12.0.0", 10, "10.11.8", false},
+		{"Jellyfin 12 rejects .NET 11", "12.0.0", 11, "12.0.0", false},
+		{"unknown target preserves legacy behavior", "13.0.0", 11, "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsVersionCompatible(tt.abi, tt.dotnetMajor, tt.targetVersion); got != tt.want {
+				t.Errorf("IsVersionCompatible() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestFilterIncompatibleVersions(t *testing.T) {
 	versions := []Version{

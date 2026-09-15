@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -199,7 +200,7 @@ func IsTTLExpired(lastFetched string, ttlSeconds int) bool {
 }
 
 // BuildLocalManifest reads the DB and returns a Catalog with sourceUrl replaced by local URLs.
-func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
+func BuildLocalManifest(repoID, baseURL, targetVersion string) (Catalog, error) {
 	rows, err := db.DB.Query(
 		`SELECT p.guid, p.name, COALESCE(p.description,''), COALESCE(p.overview,''),
 		        COALESCE(p.owner,''), COALESCE(p.category,''), COALESCE(p.image_url,''),
@@ -242,7 +243,7 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 		}
 
 		// Always use our server URL — handlePackage streams from upstream if not cached.
-		resolvedURL := localURL(baseURL, checksum, localPath, srcURL)
+		resolvedURL := localURL(baseURL, checksum, localPath, srcURL, targetVersion)
 
 		pluginMap[guid].Versions = append(pluginMap[guid].Versions, Version{
 			Version:     ver,
@@ -255,7 +256,8 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 		})
 	}
 
-	targetVersion := config.Get().Compat.JellyfinVersion
+	// BuildLocalManifest receives the resolved request version from the handler.
+	// An empty target preserves historical unfiltered behavior.
 	dotnetCap := pkgcheck.MaxDotnetMajor(targetVersion)
 	catalog := make(Catalog, 0, len(order))
 	for _, g := range order {
@@ -362,7 +364,7 @@ func buildUnifiedManifest(baseURL, targetVersion string) (Catalog, error) {
 		e.seenVersions[versionKey] = true
 
 		// Always use our server URL — handlePackage streams from upstream if not cached.
-		resolvedURL := localURL(baseURL, checksum, localPath, srcURL)
+		resolvedURL := localURL(baseURL, checksum, localPath, srcURL, targetVersion)
 
 		e.p.Versions = append(e.p.Versions, Version{
 			Version:     ver,
@@ -472,16 +474,26 @@ func tagAmbiguousChangelogs(versions []Version) {
 //
 // A no-op when the setting is unset (empty targetVersion),
 // preserving today's behavior for anyone who hasn't configured it.
-func filterIncompatibleVersions(versions []Version, targetVersion string, dotnetMajorCap int) []Version {
+// IsVersionCompatible reports whether an ABI/.NET package can load on a
+// resolved Jellyfin target version. An empty or unknown target deliberately
+// keeps the legacy permissive behavior; callers with a known client version
+// receive both ABI and scanned-runtime protection.
+func IsVersionCompatible(targetABI string, dotnetMajor int, targetVersion string) bool {
 	if targetVersion == "" {
-		return versions
+		return true
 	}
+	if targetABI != "" && CompareVersionStrings(targetABI, targetVersion) > 0 {
+		return false
+	}
+	dotnetCap := pkgcheck.MaxDotnetMajor(targetVersion)
+	return dotnetMajor == 0 || dotnetCap == 0 || dotnetMajor <= dotnetCap
+}
+
+func filterIncompatibleVersions(versions []Version, targetVersion string, _ int) []Version {
 	kept := versions[:0]
 	for _, v := range versions {
-		if v.TargetABI == "" || CompareVersionStrings(v.TargetABI, targetVersion) <= 0 {
-			if v.DotnetMajor == 0 || dotnetMajorCap == 0 || v.DotnetMajor <= dotnetMajorCap {
-				kept = append(kept, v)
-			}
+		if IsVersionCompatible(v.TargetABI, v.DotnetMajor, targetVersion) {
+			kept = append(kept, v)
 		}
 	}
 	return kept
@@ -558,7 +570,7 @@ func imageProxyURL(base, guid, upstream string) string {
 	return fmt.Sprintf("%s/plugins/images/%s", strings.TrimRight(base, "/"), guid)
 }
 
-func localURL(base, checksum, localPath, srcURL string) string {
+func localURL(base, checksum, localPath, srcURL, jellyfinVersion string) string {
 	name := checksum + ".zip"
 	if localPath != "" {
 		if idx := strings.LastIndex(localPath, "/"); idx >= 0 {
@@ -576,5 +588,9 @@ func localURL(base, checksum, localPath, srcURL string) string {
 			}
 		}
 	}
-	return fmt.Sprintf("%s/plugins/packages/%s/%s", strings.TrimRight(base, "/"), checksum, name)
+	path := fmt.Sprintf("%s/plugins/packages/%s/%s", strings.TrimRight(base, "/"), checksum, name)
+	if jellyfinVersion == "" {
+		return path
+	}
+	return path + "?" + url.Values{"jv": []string{jellyfinVersion}}.Encode()
 }

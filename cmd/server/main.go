@@ -54,7 +54,8 @@ func main() {
 	manifest.SetEnqueueFunc(downloader.EnqueueAllPending)
 	manifest.SetImagePrewarmFunc(handler.PrewarmImages)
 	downloader.RecoverStuckDownloads() // must run before any EnqueueAllPending call
-	downloader.BackfillRuntimeCompat() // re-verify cached packages against the configured Jellyfin runtime
+	downloader.RecoverRuntimeIncompatibleFailures()
+	downloader.BackfillRuntimeCompat() // scan cached packages for runtime metadata
 	go downloader.EnqueueAllPending()
 	go scheduledCleanup()
 	go startupRefresh(cfg) // warm the DB on startup so /manifest is immediately populated
@@ -165,8 +166,8 @@ func scheduledCleanup() {
 			logger.Warn("scheduled cleanup error", map[string]any{"err": err})
 		} else {
 			logger.Info("scheduled cleanup done", map[string]any{
-				"lru":        len(result.LRURemoved),
-				"orphan":     len(result.OrphanRemoved),
+				"lru":         len(result.LRURemoved),
+				"orphan":      len(result.OrphanRemoved),
 				"bytes_freed": result.BytesFreed,
 			})
 		}

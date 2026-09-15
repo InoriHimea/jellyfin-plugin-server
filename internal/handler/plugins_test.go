@@ -1,6 +1,42 @@
 package handler
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/valyala/fasthttp"
+)
+
+func TestResolvePackageJellyfinVersion(t *testing.T) {
+	tests := []struct {
+		name           string
+		uri            string
+		userAgent      string
+		defaultVersion string
+		want           string
+		wantErr        bool
+	}{
+		{"jv wins over conflicting UA", "/plugins/packages/a/file.zip?jv=12.0.0", "Jellyfin/10.11.8.0", "10.11.8", "12.0.0", false},
+		{"jv normalizes prefix", "/plugins/packages/a/file.zip?jv=v12.0.0", "", "10.11.8", "12.0.0", false},
+		{"UA fallback", "/plugins/packages/a/file.zip", "Jellyfin/12.0.0.0", "10.11.8", "12.0.0", false},
+		{"configured fallback", "/plugins/packages/a/file.zip", "curl/8.0", "10.11.8", "10.11.8", false},
+		{"invalid jv rejected", "/plugins/packages/a/file.zip?jv=not-a-version", "Jellyfin/12.0.0.0", "10.11.8", "", true},
+		{"duplicate jv rejected", "/plugins/packages/a/file.zip?jv=12.0.0&jv=10.11.8", "", "10.11.8", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var ctx fasthttp.RequestCtx
+			ctx.Request.SetRequestURI(tt.uri)
+			ctx.Request.Header.SetUserAgent(tt.userAgent)
+			got, err := resolvePackageJellyfinVersion(&ctx, tt.defaultVersion)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("error = %v, wantErr=%v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("version = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestResolveJellyfinVersion(t *testing.T) {
 	tests := []struct {

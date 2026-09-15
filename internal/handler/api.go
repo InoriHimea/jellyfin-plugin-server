@@ -546,6 +546,7 @@ type catalogEntry struct {
 	// "Not Supported" (stricter than whatever let the catalog show/install it).
 	LatestVersionCompatible *bool `json:"latest_version_compatible,omitempty"`
 	latestTargetABI         string
+	latestDotnetMajor       int
 }
 
 // apiCatalog lists one card per plugin GUID, merged across every enabled
@@ -562,7 +563,7 @@ func apiCatalog(ctx *fasthttp.RequestCtx) {
 	rows, err := db.DB.Query(`
 		SELECT p.guid, p.name, COALESCE(p.description,''), COALESCE(p.overview,''),
 		       COALESCE(p.owner,''), COALESCE(p.category,''), r.name, COALESCE(p.image_url,''),
-		       v.id, v.version, v.download_status, COALESCE(v.target_abi,'')
+		       v.id, v.version, v.download_status, COALESCE(v.target_abi,''), COALESCE(v.dotnet_major,0)
 		FROM plugins p
 		JOIN repos r ON r.id=p.repo_id
 		JOIN plugin_versions v ON v.plugin_id = p.id
@@ -580,8 +581,9 @@ func apiCatalog(ctx *fasthttp.RequestCtx) {
 	for rows.Next() {
 		var guid, name, desc, overview, owner, cat, repoName, imageURL string
 		var verID, ver, status, abi string
+		var dotnetMajor int
 		if err := rows.Scan(&guid, &name, &desc, &overview, &owner, &cat, &repoName, &imageURL,
-			&verID, &ver, &status, &abi); err != nil {
+			&verID, &ver, &status, &abi, &dotnetMajor); err != nil {
 			continue
 		}
 
@@ -601,6 +603,7 @@ func apiCatalog(ctx *fasthttp.RequestCtx) {
 			e.LatestStatus = status
 			e.VersionID = verID
 			e.latestTargetABI = abi
+			e.latestDotnetMajor = dotnetMajor
 		}
 	}
 
@@ -608,8 +611,8 @@ func apiCatalog(ctx *fasthttp.RequestCtx) {
 	entries := make([]catalogEntry, 0, len(order))
 	for _, g := range order {
 		e := *agg[g]
-		if targetVersion != "" && e.latestTargetABI != "" {
-			compatible := manifest.CompareVersionStrings(e.latestTargetABI, targetVersion) <= 0
+		if targetVersion != "" {
+			compatible := manifest.IsVersionCompatible(e.latestTargetABI, e.latestDotnetMajor, targetVersion)
 			e.LatestVersionCompatible = &compatible
 		}
 		entries = append(entries, e)
@@ -623,7 +626,7 @@ func apiCatalog(ctx *fasthttp.RequestCtx) {
 func apiCatalogVersions(ctx *fasthttp.RequestCtx, guid string) {
 	rows, err := db.DB.Query(`
 		SELECT v.id, v.version, COALESCE(v.target_abi,''), COALESCE(v.changelog,''),
-		       v.checksum, v.download_status, COALESCE(v.timestamp,''), r.name
+		       v.checksum, v.download_status, COALESCE(v.timestamp,''), r.name, COALESCE(v.dotnet_major,0)
 		FROM plugin_versions v
 		JOIN plugins p ON p.id = v.plugin_id
 		JOIN repos r ON r.id = p.repo_id
@@ -636,21 +639,22 @@ func apiCatalogVersions(ctx *fasthttp.RequestCtx, guid string) {
 	defer rows.Close()
 
 	type versionEntry struct {
-		ID         string `json:"id"`
-		Version    string `json:"version"`
-		TargetABI  string `json:"target_abi"`
-		ChangeLog  string `json:"changelog,omitempty"`
-		Checksum   string `json:"checksum"`
-		Status     string `json:"status"`
-		Timestamp  string `json:"timestamp"`
-		RepoName   string `json:"repo_name"`
-		Compatible *bool  `json:"compatible,omitempty"` // nil when no compat.jellyfin_version is configured
+		ID          string `json:"id"`
+		Version     string `json:"version"`
+		TargetABI   string `json:"target_abi"`
+		ChangeLog   string `json:"changelog,omitempty"`
+		Checksum    string `json:"checksum"`
+		Status      string `json:"status"`
+		Timestamp   string `json:"timestamp"`
+		RepoName    string `json:"repo_name"`
+		Compatible  *bool  `json:"compatible,omitempty"` // nil when no compat.jellyfin_version is configured
+		dotnetMajor int
 	}
 	entries := []versionEntry{}
 	for rows.Next() {
 		var e versionEntry
 		if err := rows.Scan(&e.ID, &e.Version, &e.TargetABI, &e.ChangeLog,
-			&e.Checksum, &e.Status, &e.Timestamp, &e.RepoName); err != nil {
+			&e.Checksum, &e.Status, &e.Timestamp, &e.RepoName, &e.dotnetMajor); err != nil {
 			continue
 		}
 		entries = append(entries, e)
@@ -665,10 +669,7 @@ func apiCatalogVersions(ctx *fasthttp.RequestCtx, guid string) {
 
 	if targetVersion := config.Get().Compat.JellyfinVersion; targetVersion != "" {
 		for i, e := range entries {
-			if e.TargetABI == "" {
-				continue
-			}
-			compatible := manifest.CompareVersionStrings(e.TargetABI, targetVersion) <= 0
+			compatible := manifest.IsVersionCompatible(e.TargetABI, e.dotnetMajor, targetVersion)
 			entries[i].Compatible = &compatible
 		}
 	}
@@ -678,7 +679,7 @@ func apiCatalogVersions(ctx *fasthttp.RequestCtx, guid string) {
 
 func apiCatalogDownload(ctx *fasthttp.RequestCtx, guid string) {
 	rows, err := db.DB.Query(`
-		SELECT pv.id, pv.version, pv.checksum, pv.source_url
+		SELECT pv.id, pv.version, pv.checksum, pv.source_url, COALESCE(pv.target_abi,''), COALESCE(pv.dotnet_major,0)
 		FROM plugin_versions pv
 		JOIN plugins p ON p.id=pv.plugin_id
 		JOIN repos r ON r.id=p.repo_id
@@ -688,14 +689,18 @@ func apiCatalogDownload(ctx *fasthttp.RequestCtx, guid string) {
 		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	// Pick the numerically newest version across every contributing repo —
-	// same rule apiCatalog uses to decide "latest" — not just the
-	// highest-priority repo's own newest-by-timestamp row, so the download
-	// button can't silently fetch a different version than the card shows.
+	// Pick the newest version compatible with the administrator's background
+	// cache target. Requesting Jellyfin clients still receive their own
+	// per-request manifest filtering; this action has no client context.
 	var versionID, bestVersion, checksum, sourceURL string
+	targetVersion := config.Get().Compat.JellyfinVersion
 	for rows.Next() {
-		var id, ver, sum, src string
-		if err := rows.Scan(&id, &ver, &sum, &src); err != nil {
+		var id, ver, sum, src, abi string
+		var dotnetMajor int
+		if err := rows.Scan(&id, &ver, &sum, &src, &abi, &dotnetMajor); err != nil {
+			continue
+		}
+		if !manifest.IsVersionCompatible(abi, dotnetMajor, targetVersion) {
 			continue
 		}
 		if bestVersion == "" || manifest.CompareVersionStrings(ver, bestVersion) > 0 {

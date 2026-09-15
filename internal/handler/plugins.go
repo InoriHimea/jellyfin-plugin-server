@@ -183,7 +183,12 @@ func handleManifest(ctx *fasthttp.RequestCtx, repoID string) {
 	}
 
 	baseURL := baseURLFromCtx(ctx)
-	catalog, err := manifest.BuildLocalManifest(repo.ID, baseURL)
+	targetVersion := resolveJellyfinVersion(
+		"",
+		string(ctx.Request.Header.UserAgent()),
+		config.Get().Compat.JellyfinVersion,
+	)
+	catalog, err := manifest.BuildLocalManifest(repo.ID, baseURL, targetVersion)
 	if err != nil {
 		logger.Error("build local manifest failed", map[string]any{"err": err})
 		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "internal error"})
@@ -201,15 +206,50 @@ func handleManifest(ctx *fasthttp.RequestCtx, repoID string) {
 // downloaded synchronously (through the configured proxy, checksum-verified,
 // deduplicated via singleflight) and then served — never a raw pass-through
 // stream, so Jellyfin can't receive a truncated or corrupt body.
+// resolvePackageJellyfinVersion preserves the compatibility context encoded in
+// a manifest's package URL. Old URLs remain valid by falling back to the
+// request User-Agent and then the administrator's configured default.
+func resolvePackageJellyfinVersion(ctx *fasthttp.RequestCtx, configuredDefault string) (string, error) {
+	values := ctx.QueryArgs().PeekMulti("jv")
+	if len(values) > 1 {
+		return "", fmt.Errorf("multiple jv parameters")
+	}
+	if len(values) == 1 {
+		version := string(values[0])
+		if !isValidJellyfinVersion(version) {
+			return "", fmt.Errorf("invalid jv parameter")
+		}
+		return strings.TrimPrefix(version, "v"), nil
+	}
+	return resolveJellyfinVersion("", string(ctx.Request.Header.UserAgent()), configuredDefault), nil
+}
+
 func handlePackage(ctx *fasthttp.RequestCtx, checksum, filename string) {
-	var versionID, localPath, sourceURL, dlStatus string
+	var versionID, localPath, sourceURL, dlStatus, targetABI string
+	var dotnetMajor int
 	err := db.DB.QueryRow(
-		`SELECT id, COALESCE(local_path,''), source_url, download_status
+		`SELECT id, COALESCE(local_path,''), source_url, download_status,
+		        COALESCE(target_abi,''), COALESCE(dotnet_major,0)
 		 FROM plugin_versions WHERE checksum=?`, checksum,
-	).Scan(&versionID, &localPath, &sourceURL, &dlStatus)
+	).Scan(&versionID, &localPath, &sourceURL, &dlStatus, &targetABI, &dotnetMajor)
 
 	if err != nil {
 		writeJSON(ctx, fasthttp.StatusNotFound, map[string]string{"error": "package not found"})
+		return
+	}
+
+	targetVersion, err := resolvePackageJellyfinVersion(ctx, config.Get().Compat.JellyfinVersion)
+	if err != nil {
+		writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if dlStatus == "done" && localPath != "" {
+		if _, statErr := os.Stat(localPath); statErr == nil {
+			dotnetMajor = downloader.EnsureDotnetMajor(versionID, localPath, dotnetMajor)
+		}
+	}
+	if !manifest.IsVersionCompatible(targetABI, dotnetMajor, targetVersion) {
+		writeJSON(ctx, fasthttp.StatusForbidden, map[string]string{"error": "package is incompatible with this Jellyfin version"})
 		return
 	}
 
@@ -224,7 +264,7 @@ func handlePackage(ctx *fasthttp.RequestCtx, checksum, filename string) {
 
 	// Cache miss: download to disk now (checksum-verified), then serve the file.
 	// Concurrent requests for the same checksum share one download via singleflight.
-	if err := downloader.EnqueueSync(versionID, checksum, sourceURL, filename); err != nil {
+	if err := downloader.EnqueueSync(versionID, checksum, sourceURL, filename, targetVersion); err != nil {
 		logger.Warn("on-demand download failed", map[string]any{"err": err, "url": sourceURL})
 		writeJSON(ctx, fasthttp.StatusBadGateway, map[string]string{"error": "upstream download failed"})
 		return

@@ -15,8 +15,8 @@ import (
 	"github.com/inorihimea/jellyfin-plugin-server/internal/config"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/db"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/logger"
-	proxyClient "github.com/inorihimea/jellyfin-plugin-server/internal/proxy"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/pkgcheck"
+	proxyClient "github.com/inorihimea/jellyfin-plugin-server/internal/proxy"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/storage"
 	"golang.org/x/sync/singleflight"
 )
@@ -51,24 +51,25 @@ func Enqueue(versionID, checksum, sourceURL, filename string) {
 		sf.Do(checksum, func() (any, error) {
 			getSem() <- struct{}{}
 			defer func() { <-getSem() }()
-			download(versionID, checksum, sourceURL, filename)
+			download(versionID, checksum, sourceURL, filename, "")
 			return nil, nil
 		})
 	}()
 }
 
 // EnqueueSync downloads synchronously and returns when complete.
-// Used for on-demand fetches triggered by package requests.
-func EnqueueSync(versionID, checksum, sourceURL, filename string) error {
-	_, err, _ := sf.Do(checksum, func() (any, error) {
+// jellyfinVersion is the compatibility context carried from a manifest URL;
+// an empty value makes this an integrity-only cache fill.
+func EnqueueSync(versionID, checksum, sourceURL, filename, jellyfinVersion string) error {
+	_, err, _ := sf.Do(versionID+"\x00"+checksum, func() (any, error) {
 		getSem() <- struct{}{}
 		defer func() { <-getSem() }()
-		return nil, download(versionID, checksum, sourceURL, filename)
+		return nil, download(versionID, checksum, sourceURL, filename, jellyfinVersion)
 	})
 	return err
 }
 
-func download(versionID, checksum, sourceURL, filename string) error {
+func download(versionID, checksum, sourceURL, filename, jellyfinVersion string) error {
 	// Enforce disk limit before starting.
 	cfg := config.Get()
 	if limitMB := cfg.Storage.MaxDiskMB; limitMB > 0 {
@@ -160,10 +161,11 @@ func download(versionID, checksum, sourceURL, filename string) error {
 		return err
 	}
 	dotnetMajor := pkgcheck.ScanZipDotnetMajor(data)
-	if allowed := pkgcheck.MaxDotnetMajor(cfg.Compat.JellyfinVersion); allowed > 0 && dotnetMajor > allowed {
+	if allowed := pkgcheck.MaxDotnetMajor(jellyfinVersion); allowed > 0 && dotnetMajor > allowed {
 		os.Remove(tmpPath)
 		msg := fmt.Sprintf("runtime incompatible: package needs .NET %d, Jellyfin %s ships .NET %d",
-			dotnetMajor, cfg.Compat.JellyfinVersion, allowed)
+			dotnetMajor, jellyfinVersion, allowed)
+		db.DB.Exec(`UPDATE plugin_versions SET dotnet_major=? WHERE id=?`, dotnetMajor, versionID)
 		markFailed(versionID, msg)
 		logger.Warn("package rejected: runtime incompatible", map[string]any{
 			"version_id": versionID, "file": filename,
@@ -237,16 +239,13 @@ func markFailed(versionID, reason string) {
 	logger.Warn("download failed", map[string]any{"version_id": versionID, "reason": reason, "permanent": status == "failed_permanent"})
 }
 
-// isPermanentFailure reports whether a failure reason indicates the
-// upstream data itself is wrong (bad checksum, a 4xx meaning the file
-// genuinely isn't there, or a package built against an unsupported .NET
-// runtime) rather than a transient network/server problem worth
-// auto-retrying on the next refresh cycle.
+// isPermanentFailure reports whether a failure reason indicates the upstream
+// data itself is wrong (bad checksum or a 4xx meaning the file genuinely
+// isn't there) rather than a transient/request-specific failure. Runtime
+// compatibility is request-scoped: a package rejected for Jellyfin 10.11 may
+// be valid for Jellyfin 12, so it must remain recoverable.
 func isPermanentFailure(reason string) bool {
 	if strings.HasPrefix(reason, "checksum mismatch") {
-		return true
-	}
-	if strings.HasPrefix(reason, "runtime incompatible") {
 		return true
 	}
 	if rest, ok := strings.CutPrefix(reason, "upstream "); ok {
@@ -274,36 +273,66 @@ func RecoverStuckDownloads() {
 	}
 }
 
-// BackfillRuntimeCompat re-scans every already-downloaded package against
-// the configured Jellyfin runtime. Versions downloaded before the runtime
-// check existed (or before compat.jellyfin_version was set) may be cached
-// packages that can't actually load — reclassify those as permanent
-// failures and delete the local files so the manifest falls back to a
-// compatible source for the same version. A no-op when no Jellyfin version
-// is configured.
-func BackfillRuntimeCompat() {
-	allowed := pkgcheck.MaxDotnetMajor(config.Get().Compat.JellyfinVersion)
-	if allowed == 0 {
-		return
-	}
-
-	rows, err := db.DB.Query(
-		`SELECT id, COALESCE(local_path,''), COALESCE(dotnet_major,0) FROM plugin_versions
-		 WHERE download_status='done' AND local_path<>''`,
+// RecoverRuntimeIncompatibleFailures restores packages permanently failed by
+// the old global-runtime policy. Only this precise historical reason is
+// recoverable: checksum mismatches and missing upstream files remain dead
+// letters. The current downloader records package metadata and applies
+// runtime compatibility per client request instead.
+func RecoverRuntimeIncompatibleFailures() {
+	res, err := db.DB.Exec(
+		`UPDATE plugin_versions
+		 SET download_status='pending', fail_reason='', local_path='', downloaded_at=NULL
+		 WHERE download_status='failed_permanent' AND fail_reason LIKE 'runtime incompatible:%'`,
 	)
 	if err != nil {
-		logger.Warn("runtime backfill query failed", map[string]any{"err": err})
+		logger.Warn("recover runtime-incompatible packages failed", map[string]any{"err": err})
+		return
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		logger.Info("recovered runtime-incompatible packages", map[string]any{"count": n})
+		db.WriteLog("INFO", "recovered runtime-incompatible packages", fmt.Sprintf("count=%d", n))
+	}
+}
+
+// EnsureDotnetMajor scans a cached package whose runtime metadata predates
+// the scanner and persists the result. It returns 0 when the file cannot be
+// read or contains no managed assembly marker.
+func EnsureDotnetMajor(versionID, path string, current int) int {
+	if current != 0 || path == "" {
+		return current
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	major := pkgcheck.ScanZipDotnetMajor(data)
+	db.DB.Exec(`UPDATE plugin_versions SET dotnet_major=? WHERE id=?`, major, versionID)
+	return major
+}
+
+// BackfillRuntimeCompat scans already-cached packages that predate
+// dotnet_major metadata and records their actual runtime requirement. Runtime
+// compatibility is evaluated when a manifest/package is requested, so this
+// deliberately never deletes valid files just because the configured fallback
+// version is lower than another Jellyfin client may require.
+func BackfillRuntimeCompat() {
+	rows, err := db.DB.Query(
+		`SELECT id, COALESCE(local_path,''), COALESCE(dotnet_major,0) FROM plugin_versions
+		 WHERE download_status='done' AND local_path<>'' AND COALESCE(dotnet_major,0)=0`,
+	)
+	if err != nil {
+		logger.Warn("runtime metadata backfill query failed", map[string]any{"err": err})
 		return
 	}
 	type candidate struct {
-		id     string
-		path   string
-		major  int
+		id   string
+		path string
 	}
 	var candidates []candidate
 	for rows.Next() {
 		var c candidate
-		if err := rows.Scan(&c.id, &c.path, &c.major); err != nil {
+		var ignored int
+		if err := rows.Scan(&c.id, &c.path, &ignored); err != nil {
 			continue
 		}
 		candidates = append(candidates, c)
@@ -311,28 +340,7 @@ func BackfillRuntimeCompat() {
 	rows.Close()
 
 	for _, c := range candidates {
-		major := c.major
-		if major == 0 {
-			data, err := os.ReadFile(c.path)
-			if err != nil {
-				continue // file gone; the fast path in handlePackage already handles that
-			}
-			major = pkgcheck.ScanZipDotnetMajor(data)
-		}
-		if major <= allowed {
-			continue
-		}
-		msg := fmt.Sprintf("runtime incompatible: package needs .NET %d, Jellyfin %s ships .NET %d",
-			major, config.Get().Compat.JellyfinVersion, allowed)
-		db.DB.Exec(
-			`UPDATE plugin_versions SET download_status='failed_permanent', fail_reason=?, local_path='', dotnet_major=? WHERE id=?`,
-			msg, major, c.id,
-		)
-		os.Remove(c.path)
-		logger.Warn("backfill: cached package is runtime-incompatible", map[string]any{
-			"version_id": c.id, "package_dotnet": major, "runtime_dotnet": allowed,
-		})
-		db.WriteLog("WARN", "backfill: cached package is runtime-incompatible", msg)
+		EnsureDotnetMajor(c.id, c.path, 0)
 	}
 }
 
