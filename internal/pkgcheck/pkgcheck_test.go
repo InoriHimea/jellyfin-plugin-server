@@ -63,9 +63,12 @@ func TestMaxDotnetMajor(t *testing.T) {
 		{"10.9.2.0", 8},
 		{"10.10.7.0", 8},
 		{"10.11.8.0", 9},
-		{"10.12.0.0", 9},  // unmapped future series → last known table entry
-		{"11.0.0.0", 0},   // future major: unmapped → refuse to filter
-		{"9.10.10.0", 0},  // pre-10 Jellyfin → refuse to filter
+		{"10.12.0.0", 9}, // unmapped future series → last known table entry
+		{"11.0.0.0", 0},  // future major: unmapped → refuse to filter
+		{"12.0.0.0", 10}, // Jellyfin 12.x → .NET 10
+		{"12.3.1", 10},
+		{"13.0.0.0", 0},  // future major: unmapped → refuse to filter
+		{"9.10.10.0", 0}, // pre-10 Jellyfin → refuse to filter
 		{"", 0},
 		{"garbage", 0},
 		{"10.11", 9},

@@ -85,19 +85,17 @@ func serveImage(ctx *fasthttp.RequestCtx, data []byte) {
 }
 
 // handleUnifiedManifest serves GET /manifest — all enabled repos merged and deduplicated by GUID.
-// GET /manifest/{version} (e.g. /manifest/10.11.8) serves the same catalog
-// filtered for that specific Jellyfin version instead of the configured or
-// auto-detected one — useful for checking what a given server would see.
+// GET /manifest/{version} (e.g. /manifest/10.11.8) pins the catalog to that
+// Jellyfin version. Otherwise a recognizable Jellyfin User-Agent determines
+// compatibility for that request, allowing multiple Jellyfin versions to
+// share this server without filtering one another's manifests.
 func handleUnifiedManifest(ctx *fasthttp.RequestCtx) {
 	baseURL := baseURLFromCtx(ctx)
 
-	manifest.DetectFromUserAgent(string(ctx.Request.Header.UserAgent()))
-
-	// Optional explicit version from the path: /manifest/{version}.
-	override := ""
+	pathVersion := ""
 	if path := string(ctx.Path()); path != "/manifest" && path != "/manifest/" {
-		override = strings.Trim(strings.TrimPrefix(path, "/manifest"), "/")
-		if !isValidJellyfinVersion(override) {
+		pathVersion = strings.Trim(strings.TrimPrefix(path, "/manifest"), "/")
+		if !isValidJellyfinVersion(pathVersion) {
 			writeJSON(ctx, fasthttp.StatusBadRequest, map[string]string{
 				"error": "invalid version, expected e.g. /manifest/10.11.8",
 			})
@@ -105,7 +103,12 @@ func handleUnifiedManifest(ctx *fasthttp.RequestCtx) {
 		}
 	}
 
-	catalog, err := manifest.BuildUnifiedManifestForVersion(baseURL, override)
+	targetVersion := resolveJellyfinVersion(
+		pathVersion,
+		string(ctx.Request.Header.UserAgent()),
+		config.Get().Compat.JellyfinVersion,
+	)
+	catalog, err := manifest.BuildUnifiedManifestForVersion(baseURL, targetVersion)
 	if err != nil {
 		logger.Error("build unified manifest failed", map[string]any{"err": err})
 		writeJSON(ctx, fasthttp.StatusInternalServerError, map[string]string{"error": "internal error"})
@@ -139,6 +142,19 @@ func isValidJellyfinVersion(v string) bool {
 		}
 	}
 	return true
+}
+
+// resolveJellyfinVersion chooses manifest compatibility for one request.
+// The configured default is only for clients that don't identify themselves;
+// it remains the global policy for background package caching.
+func resolveJellyfinVersion(pathVersion, userAgent, configuredDefault string) string {
+	if pathVersion != "" {
+		return strings.TrimPrefix(pathVersion, "v")
+	}
+	if detected := manifest.JellyfinVersionFromUserAgent(userAgent); detected != "" {
+		return detected
+	}
+	return configuredDefault
 }
 
 func handleManifest(ctx *fasthttp.RequestCtx, repoID string) {

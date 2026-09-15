@@ -111,8 +111,7 @@ export function Settings() {
               placeholder="10.11.11"
             />
             <p className="text-xs text-muted-foreground">
-              填写后，插件目录会标注每个版本是否兼容——Jellyfin 允许安装任何 targetAbi 能解析的版本，
-              但实际加载时会用服务器自身版本比对 targetAbi，不满足就显示"Not Supported"。这个设置只影响本面板的标注，不影响送给 Jellyfin 的数据。留空则不显示标注。
+              当请求未携带可识别的 Jellyfin User-Agent、且 URL 未使用 <code>/manifest/版本号</code> 时，以此版本过滤 manifest；同时它也是后台预下载和已缓存包校验的全局运行时策略。标准 Jellyfin 请求会按自身版本自动筛选，因此多个不同版本的服务器可共享本服务。留空时，无版本信息的请求不做兼容性过滤。
             </p>
           </div>
         </CardContent>

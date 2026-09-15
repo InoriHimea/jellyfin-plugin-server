@@ -108,9 +108,15 @@ func migrateVersionAbiUnique(db *sql.DB) error {
 			download_status TEXT NOT NULL DEFAULT 'pending',
 			downloaded_at  TEXT,
 			fail_reason    TEXT NOT NULL DEFAULT '',
+			dotnet_major   INTEGER NOT NULL DEFAULT 0,
 			UNIQUE(plugin_id, version, target_abi)
 		)`,
-		`INSERT INTO plugin_versions_new SELECT * FROM plugin_versions`,
+		`INSERT INTO plugin_versions_new
+			(id, plugin_id, version, changelog, target_abi, source_url, checksum,
+			 timestamp, local_path, download_status, downloaded_at, fail_reason, dotnet_major)
+		 SELECT id, plugin_id, version, changelog, target_abi, source_url, checksum,
+			 timestamp, local_path, download_status, downloaded_at, fail_reason, COALESCE(dotnet_major, 0)
+		 FROM plugin_versions`,
 		`DROP TABLE plugin_versions`,
 		`ALTER TABLE plugin_versions_new RENAME TO plugin_versions`,
 		`CREATE INDEX IF NOT EXISTS idx_versions_plugin       ON plugin_versions(plugin_id)`,

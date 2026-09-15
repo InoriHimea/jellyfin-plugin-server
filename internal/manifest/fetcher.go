@@ -10,16 +10,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/config"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/db"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/logger"
-	proxyClient "github.com/inorihimea/jellyfin-plugin-server/internal/proxy"
 	"github.com/inorihimea/jellyfin-plugin-server/internal/pkgcheck"
-	"github.com/google/uuid"
+	proxyClient "github.com/inorihimea/jellyfin-plugin-server/internal/proxy"
 )
 
-// unifiedCache holds the last BuildUnifiedManifest result per baseURL.
-// Invalidated whenever FetchAndStore writes new data.
+// unifiedCache holds BuildUnifiedManifest results per base URL and resolved
+// Jellyfin target version. Invalidated whenever FetchAndStore writes new data.
 var (
 	unifiedMu      sync.RWMutex
 	unifiedEntries = map[string]unifiedEntry{}
@@ -274,25 +274,26 @@ func BuildLocalManifest(repoID, baseURL string) (Catalog, error) {
 
 // BuildUnifiedManifest aggregates all enabled repos into one deduplicated Catalog.
 // Per-GUID: metadata from the highest-priority repo; per (GUID, version): highest-priority copy wins.
-// Results are cached in memory for unifiedTTL (60s) to avoid repeated DB scans.
+// It uses compat.jellyfin_version as the fallback for callers without a
+// request-specific target version.
 func BuildUnifiedManifest(baseURL string) (Catalog, error) {
-	return buildUnifiedManifest(baseURL, "")
+	return BuildUnifiedManifestForVersion(baseURL, config.Get().Compat.JellyfinVersion)
 }
 
-// BuildUnifiedManifestForVersion is BuildUnifiedManifest with the
-// compatibility filters applied against an explicitly given Jellyfin
-// version instead of the configured one ("" = use config, same as
-// BuildUnifiedManifest). Backs the /manifest/{version} preview endpoint.
-// Not cached — it's a low-traffic diagnostic path.
-func BuildUnifiedManifestForVersion(baseURL, jellyfinVersion string) (Catalog, error) {
-	return buildUnifiedManifest(baseURL, jellyfinVersion)
+// BuildUnifiedManifestForVersion builds a catalog filtered for targetVersion.
+// targetVersion must already be resolved by the caller; an empty value keeps
+// all ABI/runtime variants. The cache key includes targetVersion so manifests
+// for different Jellyfin clients never leak across one another.
+func BuildUnifiedManifestForVersion(baseURL, targetVersion string) (Catalog, error) {
+	return buildUnifiedManifest(baseURL, targetVersion)
 }
 
-func buildUnifiedManifest(baseURL, jellyfinVersionOverride string) (Catalog, error) {
+func buildUnifiedManifest(baseURL, targetVersion string) (Catalog, error) {
+	cacheKey := baseURL + "\x00" + targetVersion
 	unifiedMu.RLock()
-	entry, ok := unifiedEntries[baseURL]
+	entry, ok := unifiedEntries[cacheKey]
 	unifiedMu.RUnlock()
-	if ok && time.Now().Before(entry.expiresAt) && jellyfinVersionOverride == "" {
+	if ok && time.Now().Before(entry.expiresAt) {
 		return entry.catalog, nil
 	}
 
@@ -374,10 +375,6 @@ func buildUnifiedManifest(baseURL, jellyfinVersionOverride string) (Catalog, err
 		})
 	}
 
-	targetVersion := config.Get().Compat.JellyfinVersion
-	if jellyfinVersionOverride != "" {
-		targetVersion = jellyfinVersionOverride
-	}
 	dotnetCap := pkgcheck.MaxDotnetMajor(targetVersion)
 	catalog := make(Catalog, 0, len(order))
 	for _, g := range order {
@@ -392,11 +389,9 @@ func buildUnifiedManifest(baseURL, jellyfinVersionOverride string) (Catalog, err
 		catalog = append(catalog, *p)
 	}
 
-	if jellyfinVersionOverride == "" {
-		unifiedMu.Lock()
-		unifiedEntries[baseURL] = unifiedEntry{catalog: catalog, expiresAt: time.Now().Add(unifiedTTL)}
-		unifiedMu.Unlock()
-	}
+	unifiedMu.Lock()
+	unifiedEntries[cacheKey] = unifiedEntry{catalog: catalog, expiresAt: time.Now().Add(unifiedTTL)}
+	unifiedMu.Unlock()
 
 	return catalog, nil
 }

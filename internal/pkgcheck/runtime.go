@@ -40,10 +40,13 @@ func MaxDotnetMajor(jellyfinVersion string) int {
 		return 0
 	}
 
+	if major == 12 {
+		return 10 // Jellyfin 12.x ships on .NET 10
+	}
 	if major != 10 {
-		// Only the 10.x series is mapped. Future majors (11.x) and pre-10
-		// releases get 0 = "don't filter", so an outdated mapping never
-		// silently hides packages for a runtime we don't know.
+		// Future majors and pre-10 releases get 0 = "don't filter", so an
+		// outdated mapping never silently hides packages for a runtime we
+		// don't know.
 		return 0
 	}
 
