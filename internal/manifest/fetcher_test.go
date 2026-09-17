@@ -1,20 +1,6 @@
 package manifest
 
-import (
-	"strings"
-	"testing"
-)
-
-func TestLocalURLCarriesCompatibilityContext(t *testing.T) {
-	got := localURL("https://plugins.example/", "abc", "", "https://upstream.example/Trakt.zip?token=x", "12.0.0")
-	want := "https://plugins.example/plugins/packages/abc/Trakt.zip?jv=12.0.0"
-	if got != want {
-		t.Fatalf("localURL() = %q, want %q", got, want)
-	}
-	if strings.Contains(localURL("https://plugins.example", "abc", "", "https://upstream.example/Trakt.zip", ""), "?jv=") {
-		t.Error("empty compatibility version must not add jv")
-	}
-}
+import "testing"
 
 func TestIsVersionCompatible(t *testing.T) {
 	tests := []struct {

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -243,7 +242,7 @@ func BuildLocalManifest(repoID, baseURL, targetVersion string) (Catalog, error) 
 		}
 
 		// Always use our server URL — handlePackage streams from upstream if not cached.
-		resolvedURL := localURL(baseURL, checksum, localPath, srcURL, targetVersion)
+		resolvedURL := localURL(baseURL, checksum, localPath, srcURL)
 
 		pluginMap[guid].Versions = append(pluginMap[guid].Versions, Version{
 			Version:     ver,
@@ -263,9 +262,10 @@ func BuildLocalManifest(repoID, baseURL, targetVersion string) (Catalog, error) 
 	for _, g := range order {
 		p := pluginMap[g]
 		sortVersionsDesc(p.Versions)
-		tagAmbiguousChangelogs(p.Versions)
 		p.Versions = filterInvalidChecksums(p.Versions)
 		p.Versions = filterIncompatibleVersions(p.Versions, targetVersion, dotnetCap)
+		p.Versions = normalizeManifestVersions(p.Versions, targetVersion)
+		tagAmbiguousChangelogs(p.Versions)
 		if len(p.Versions) == 0 {
 			continue // nothing installable (or invalid checksum) for this plugin
 		}
@@ -364,7 +364,7 @@ func buildUnifiedManifest(baseURL, targetVersion string) (Catalog, error) {
 		e.seenVersions[versionKey] = true
 
 		// Always use our server URL — handlePackage streams from upstream if not cached.
-		resolvedURL := localURL(baseURL, checksum, localPath, srcURL, targetVersion)
+		resolvedURL := localURL(baseURL, checksum, localPath, srcURL)
 
 		e.p.Versions = append(e.p.Versions, Version{
 			Version:     ver,
@@ -382,9 +382,10 @@ func buildUnifiedManifest(baseURL, targetVersion string) (Catalog, error) {
 	for _, g := range order {
 		p := seen[g].p
 		sortVersionsDesc(p.Versions)
-		tagAmbiguousChangelogs(p.Versions)
 		p.Versions = filterInvalidChecksums(p.Versions)
 		p.Versions = filterIncompatibleVersions(p.Versions, targetVersion, dotnetCap)
+		p.Versions = normalizeManifestVersions(p.Versions, targetVersion)
+		tagAmbiguousChangelogs(p.Versions)
 		if len(p.Versions) == 0 {
 			continue // nothing installable (or invalid checksum) for this plugin
 		}
@@ -499,6 +500,62 @@ func filterIncompatibleVersions(versions []Version, targetVersion string, _ int)
 	return kept
 }
 
+// normalizeManifestVersions projects internal versions into the ABI shape
+// Jellyfin's System.Version parser expects for the requesting application.
+// A three-part application version treats an explicit zero revision as a
+// different value, so only an exactly matching four-part ABI with revision
+// zero is shortened. The DB value remains untouched.
+func normalizeManifestVersions(versions []Version, applicationVersion string) []Version {
+	parts := strings.Split(applicationVersion, ".")
+	if len(parts) != 3 || !allNumeric(parts) {
+		return versions
+	}
+
+	seen := make(map[string]bool, len(versions))
+	kept := make([]Version, 0, len(versions))
+	for _, v := range versions {
+		v.TargetABI = normalizeTargetABIForManifest(v.TargetABI, applicationVersion)
+		key := v.Version + "|" + v.TargetABI
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		kept = append(kept, v)
+	}
+	return kept
+}
+
+func normalizeTargetABIForManifest(targetABI, applicationVersion string) string {
+	appParts := strings.Split(applicationVersion, ".")
+	abiParts := strings.Split(targetABI, ".")
+	if len(appParts) != 3 || len(abiParts) != 4 || !allNumeric(appParts) || !allNumeric(abiParts) {
+		return targetABI
+	}
+	for i := range appParts {
+		if appParts[i] != abiParts[i] {
+			return targetABI
+		}
+	}
+	if n, err := strconv.Atoi(abiParts[3]); err != nil || n != 0 {
+		return targetABI
+	}
+	return strings.Join(abiParts[:3], ".")
+}
+
+func allNumeric(parts []string) bool {
+	for _, part := range parts {
+		if part == "" {
+			return false
+		}
+		for _, c := range part {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // filterInvalidChecksums drops versions whose checksum isn't a usable
 // 32-char hex MD5. localURL keys the download path on this value
 // (/plugins/packages/{checksum}/{filename}), so an empty one produces a
@@ -570,7 +627,7 @@ func imageProxyURL(base, guid, upstream string) string {
 	return fmt.Sprintf("%s/plugins/images/%s", strings.TrimRight(base, "/"), guid)
 }
 
-func localURL(base, checksum, localPath, srcURL, jellyfinVersion string) string {
+func localURL(base, checksum, localPath, srcURL string) string {
 	name := checksum + ".zip"
 	if localPath != "" {
 		if idx := strings.LastIndex(localPath, "/"); idx >= 0 {
@@ -588,9 +645,5 @@ func localURL(base, checksum, localPath, srcURL, jellyfinVersion string) string 
 			}
 		}
 	}
-	path := fmt.Sprintf("%s/plugins/packages/%s/%s", strings.TrimRight(base, "/"), checksum, name)
-	if jellyfinVersion == "" {
-		return path
-	}
-	return path + "?" + url.Values{"jv": []string{jellyfinVersion}}.Encode()
+	return fmt.Sprintf("%s/plugins/packages/%s/%s", strings.TrimRight(base, "/"), checksum, name)
 }
